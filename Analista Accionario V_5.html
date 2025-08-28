@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Analysis Pro</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js and Adapters -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.min.js"></script>
+
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.mjs" type="module"></script>
+
+    <!-- Custom Styles -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .nav-button-active {
+            background-color: #4f46e5; /* bg-indigo-600 */
+            color: #e5e7eb; /* text-gray-200 */
+        }
+        .timeframe-btn-active {
+            background-color: #4f46e5 !important;
+            color: white !important;
+        }
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 20%;
+            overflow-y: auto;
+        }
+        .main-content {
+            margin-left: 20%;
+            width: 80%;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.success { background-color: #10B981; }
+        .toast.error { background-color: #EF4444; }
+        .toast.info { background-color: #3B82F6; }
+
+        /* Scrollbar styles */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+        /* Custom loader */
+        .loader {
+            border: 2px solid #4b5563;
+            border-top: 2px solid #4f46e5;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-300">
+
+    <!-- Main Container -->
+    <div class="flex">
+        <!-- Columna Izquierda (Sidebar Fijo) -->
+        <aside id="sidebar" class="sidebar bg-gray-800 border-r border-gray-700 p-4 flex flex-col space-y-4">
+            <h2 class="text-xl font-bold text-white flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" /></svg>
+                Mi Watchlist
+            </h2>
+
+            <!-- Gestión de Proyecto -->
+            <div class="space-y-2">
+                <h3 class="text-md font-semibold text-gray-400">Gestión de Proyecto</h3>
+                <button id="save-project-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg text-sm">Guardar Proyecto</button>
+                <button id="load-project-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg text-sm">Cargar Proyecto</button>
+                <input type="file" id="project-file-input" class="hidden" accept=".json">
+            </div>
+
+            <!-- Claves de API -->
+            <div>
+                <h3 class="text-md font-semibold text-gray-400 mb-2">Configuración de APIs</h3>
+                <div class="bg-gray-900 p-2 rounded-lg space-y-2">
+                    <p class="text-sm font-medium text-gray-300">API FMP</p>
+                    <div class="flex space-x-4 text-sm">
+                        <label class="flex items-center"><input type="radio" name="fmp-api-key" value="API_1" class="form-radio h-4 w-4 text-indigo-600 bg-gray-700 border-gray-600"> <span class="ml-2">API 1</span></label>
+                        <label class="flex items-center"><input type="radio" name="fmp-api-key" value="API_2" class="form-radio h-4 w-4 text-indigo-600 bg-gray-700 border-gray-600"> <span class="ml-2">API 2</span></label>
+                    </div>
+                     <p class="text-sm font-medium text-gray-300 pt-2">Modelo Gemini</p>
+                    <div class="flex flex-col space-y-1 text-sm">
+                        <label class="flex items-center"><input type="radio" name="gemini-model" value="gemini-1.5-flash" class="form-radio h-4 w-4 text-indigo-600 bg-gray-700 border-gray-600"> <span class="ml-2">1.5 Flash (Rápido)</span></label>
+                        <label class="flex items-center"><input type="radio" name="gemini-model" value="gemini-2.0-flash" class="form-radio h-4 w-4 text-indigo-600 bg-gray-700 border-gray-600"> <span class="ml-2">2.0 Flash (Avanzado)</span></label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Añadir Símbolo -->
+            <div>
+                 <h3 class="text-md font-semibold text-gray-400 mb-2">Añadir Símbolo</h3>
+                <div class="flex">
+                    <input type="text" id="symbol-input" class="w-full bg-gray-700 border border-gray-600 rounded-l-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ej. AAPL, ETH...">
+                    <button id="add-symbol-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold p-2 rounded-r-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Botones de Acción Global -->
+            <div class="space-y-2">
+                 <h3 class="text-md font-semibold text-gray-400">Acciones Globales</h3>
+                <button id="update-prices-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2">
+                    <span>Actualizar Precios (FMP)</span>
+                    <div id="update-prices-loader" class="loader hidden"></div>
+                </button>
+                <button id="analyze-all-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2">
+                    <span>Analizar con IA (Gemini)</span>
+                    <div id="analyze-all-loader" class="loader hidden"></div>
+                </button>
+            </div>
+
+            <!-- Lista de Watchlist -->
+            <ul id="watchlist" class="space-y-1">
+                <!-- Los símbolos se añadirán aquí dinámicamente -->
+            </ul>
+        </aside>
+
+        <!-- Columna Derecha (Área de Contenido Principal) -->
+        <main id="main-content" class="main-content bg-gray-900 p-6">
+            <!-- Barra de Navegación -->
+            <nav class="mb-6">
+                <div id="nav-buttons" class="flex space-x-2 bg-gray-800 p-1 rounded-lg">
+                    <button data-view="dashboard" class="nav-button flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-colors nav-button-active">Dashboard</button>
+                    <button data-view="detailed-chart" class="nav-button flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-colors">Gráfico Detallado</button>
+                    <button data-view="simulator" class="nav-button flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-colors">Simulador</button>
+                    <button data-view="explorer" class="nav-button flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-colors">Explorador IA</button>
+                    <button data-view="history" class="nav-button flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-colors">Historial</button>
+                </div>
+            </nav>
+
+            <!-- Contenedor de Vistas -->
+            <div id="view-container">
+                <!-- Vista: Dashboard -->
+                <div id="dashboard-view" class="view">
+                    <div id="dashboard-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        <!-- Las tarjetas del dashboard se añadirán aquí -->
+                    </div>
+                </div>
+
+                <!-- Vista: Gráfico Detallado -->
+                <div id="detailed-chart-view" class="view hidden">
+                    <!-- El contenido se generará dinámicamente aquí -->
+                </div>
+
+                <!-- Vista: Simulador -->
+                <div id="simulator-view" class="view hidden">
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <h2 class="text-2xl font-bold text-white mb-4">Simulador de Rentabilidad</h2>
+                        <div class="flex items-center space-x-4 mb-4">
+                            <label for="investment-amount" class="font-semibold">Monto de Inversión (USD):</label>
+                            <input type="number" id="investment-amount" value="1000" class="bg-gray-700 border border-gray-600 rounded-lg p-2 w-48 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <button id="clear-simulator-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Limpiar Simulador</button>
+                        </div>
+                        <div id="simulator-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Las tarjetas de simulación se añadirán aquí -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista: Explorador IA -->
+                <div id="explorer-view" class="view hidden">
+                     <div class="bg-gray-800 p-4 rounded-lg">
+                         <h2 class="text-2xl font-bold text-white mb-4">Historial de Informes de Mercado</h2>
+                         <button id="load-report-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg mb-4 flex items-center justify-center space-x-2">
+                             <span>Cargar Nuevo Informe (.pdf)</span>
+                             <div id="report-loader" class="loader hidden"></div>
+                         </button>
+                         <input type="file" id="report-file-input" class="hidden" accept=".pdf">
+                         <div id="reports-container" class="space-y-4">
+                             <!-- Los informes procesados se añadirán aquí -->
+                         </div>
+                     </div>
+                </div>
+
+                <!-- Vista: Historial -->
+                <div id="history-view" class="view hidden">
+                    <!-- El contenido se generará dinámicamente aquí -->
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Modal para informe de Explorador IA -->
+    <div id="report-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-lg p-6 w-3/4 h-3/4 flex flex-col max-w-4xl">
+            <h3 class="text-xl font-bold text-white mb-4">Informe Completo</h3>
+            <div id="report-modal-content" class="flex-grow bg-gray-900 p-4 rounded overflow-y-auto text-sm whitespace-pre-wrap border border-gray-700"></div>
+            <button id="close-report-modal-btn" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg self-end">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script type="module">
+        // --- CONFIGURACIÓN Y ESTADO ---
+        const FMP_API_KEYS = {
+            API_1: '8WdhV0NRTNrNzsW6oOrLeaOdUBfP9Ytk', // Clave de ejemplo 1
+            API_2: 'NAyx0QgFN6dwwwTxGwpFZdcI0CbflBoV'  // Clave de ejemplo 2
+        };
+        // IMPORTANTE: Clave de API de Google Gemini actualizada
+        const GEMINI_API_KEY = 'AIzaSyDenI_hJHqIJcFQfC3EnadrRe2AItd-C-M';
+
+        const COMMON_CRYPTOS = ['BTC', 'ETH', 'XRP', 'LTC', 'BCH', 'ADA', 'DOT', 'DOGE', 'SOL', 'BNB', 'SHIB', 'TRX', 'AVAX', 'LINK', 'MATIC'];
+
+        let appState = {
+            watchlist: ['AAPL', 'GOOG', 'MSFT', 'ETH'],
+            analysisHistory: {},
+            activeView: 'dashboard',
+            selectedSymbol: null,
+            marketDataCache: {},
+            simulatorOpportunities: [],
+            weeklyReports: [],
+            investmentAmount: 1000,
+            selectedFmpApiKey: 'API_1',
+            selectedGeminiModel: 'gemini-1.5-flash',
+            chartSettings: {
+                timeframe: '1A',
+                indicators: { sma: true, volume: true, macd: true, rsi: true }
+            }
+        };
+
+        // --- REFERENCIAS A ELEMENTOS DEL DOM ---
+        const dom = {
+            watchlist: document.getElementById('watchlist'),
+            symbolInput: document.getElementById('symbol-input'),
+            addSymbolBtn: document.getElementById('add-symbol-btn'),
+            navButtons: document.getElementById('nav-buttons'),
+            dashboardGrid: document.getElementById('dashboard-grid'),
+            detailedChartView: document.getElementById('detailed-chart-view'),
+            historyView: document.getElementById('history-view'),
+            simulatorGrid: document.getElementById('simulator-grid'),
+            investmentAmountInput: document.getElementById('investment-amount'),
+            clearSimulatorBtn: document.getElementById('clear-simulator-btn'),
+            updatePricesBtn: document.getElementById('update-prices-btn'),
+            updatePricesLoader: document.getElementById('update-prices-loader'),
+            analyzeAllBtn: document.getElementById('analyze-all-btn'),
+            analyzeAllLoader: document.getElementById('analyze-all-loader'),
+            saveProjectBtn: document.getElementById('save-project-btn'),
+            loadProjectBtn: document.getElementById('load-project-btn'),
+            projectFileInput: document.getElementById('project-file-input'),
+            loadReportBtn: document.getElementById('load-report-btn'),
+            reportFileInput: document.getElementById('report-file-input'),
+            reportLoader: document.getElementById('report-loader'),
+            reportsContainer: document.getElementById('reports-container'),
+            reportModal: document.getElementById('report-modal'),
+            reportModalContent: document.getElementById('report-modal-content'),
+            closeReportModalBtn: document.getElementById('close-report-modal-btn'),
+            toast: document.getElementById('toast'),
+        };
+        
+        // --- INSTANCIAS DE GRÁFICOS ---
+        let chartInstances = {};
+
+        // --- INICIALIZACIÓN ---
+        async function initialize() {
+            if (GEMINI_API_KEY === 'TU_API_KEY_DE_GEMINI_AQUI' || GEMINI_API_KEY === '') {
+                showToast('Error: Configura tu API Key de Gemini en el código.', 'error');
+                console.error("Por favor, reemplaza 'TU_API_KEY_DE_GEMINI_AQUI' con tu clave de API real de Google Gemini en el script.");
+            }
+            loadState();
+            renderSidebarControls();
+            setupEventListeners();
+            await renderView();
+            const initialFetches = appState.watchlist
+                .filter(symbol => !appState.marketDataCache[symbol]?.fullHistory)
+                .map(symbol => fetchAndCacheSymbolData(symbol));
+            await Promise.allSettled(initialFetches);
+            if (appState.activeView === 'dashboard') {
+                renderDashboard(); 
+            }
+        }
+
+        function setupEventListeners() {
+            dom.addSymbolBtn.addEventListener('click', handleAddSymbol);
+            dom.symbolInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleAddSymbol());
+            dom.watchlist.addEventListener('click', handleWatchlistClick);
+            dom.updatePricesBtn.addEventListener('click', updateAllPrices);
+            dom.analyzeAllBtn.addEventListener('click', analyzeAllSymbols);
+            dom.saveProjectBtn.addEventListener('click', saveProject);
+            dom.loadProjectBtn.addEventListener('click', () => dom.projectFileInput.click());
+            dom.projectFileInput.addEventListener('change', loadProject);
+            dom.navButtons.addEventListener('click', handleNavClick);
+            dom.investmentAmountInput.addEventListener('change', handleInvestmentAmountChange);
+            dom.clearSimulatorBtn.addEventListener('click', clearSimulator);
+            dom.loadReportBtn.addEventListener('click', () => dom.reportFileInput.click());
+            dom.reportFileInput.addEventListener('change', handleReportUpload);
+            dom.closeReportModalBtn.addEventListener('click', () => dom.reportModal.classList.add('hidden'));
+            document.getElementById('view-container').addEventListener('click', handleDynamicClicks);
+            
+            document.querySelectorAll('input[name="fmp-api-key"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    appState.selectedFmpApiKey = e.target.value;
+                    saveState();
+                });
+            });
+            document.querySelectorAll('input[name="gemini-model"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    appState.selectedGeminiModel = e.target.value;
+                    saveState();
+                });
+            });
+        }
+        
+        function handleDynamicClicks(e) {
+            const historyToggleBtn = e.target.closest('.toggle-history-btn');
+            const justificationToggleBtn = e.target.closest('.toggle-justification-btn');
+            const reportHeader = e.target.closest('.report-header');
+            const viewReportBtn = e.target.closest('.view-full-report-btn');
+            const addFromReportBtn = e.target.closest('.add-from-report-btn');
+
+            if (historyToggleBtn) handleHistoryToggle(historyToggleBtn);
+            if (justificationToggleBtn) handleJustificationToggle(justificationToggleBtn);
+            if (reportHeader) handleReportCollapse(reportHeader);
+            if (viewReportBtn) handleViewFullReport(viewReportBtn);
+            if (addFromReportBtn) handleAddFromReport(addFromReportBtn);
+        }
+
+        // --- GESTIÓN DE ESTADO Y PERSISTENCIA ---
+        function saveState() {
+            localStorage.setItem('tradingAnalysisProState', JSON.stringify(appState));
+        }
+
+        function loadState() {
+            const savedState = localStorage.getItem('tradingAnalysisProState');
+            if (savedState) {
+                const loaded = JSON.parse(savedState);
+                const defaultState = {
+                    watchlist: ['AAPL', 'GOOG', 'MSFT', 'ETH'],
+                    analysisHistory: {},
+                    activeView: 'dashboard',
+                    selectedSymbol: null,
+                    marketDataCache: {},
+                    simulatorOpportunities: [],
+                    weeklyReports: [],
+                    investmentAmount: 1000,
+                    selectedFmpApiKey: 'API_1',
+                    selectedGeminiModel: 'gemini-1.5-flash',
+                    chartSettings: {
+                        timeframe: '1A',
+                        indicators: { sma: true, volume: true, macd: true, rsi: true }
+                    }
+                };
+                appState = { ...defaultState, ...loaded };
+            }
+        }
+
+        function saveProject() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `TradingPro-Project-${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            showToast('Proyecto guardado con éxito.', 'success');
+        }
+
+        function loadProject(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const loadedState = JSON.parse(e.target.result);
+                    if (loadedState.watchlist && loadedState.analysisHistory) {
+                        appState = loadedState;
+                        saveState();
+                        renderSidebarControls();
+                        await renderView();
+                        showToast('Proyecto cargado con éxito.', 'success');
+                    } else {
+                        throw new Error("Formato de archivo inválido.");
+                    }
+                } catch (error) {
+                    console.error("Error al cargar el proyecto:", error);
+                    showToast(`Error al cargar: ${error.message}`, 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- LÓGICA DE LA WATCHLIST ---
+        async function handleAddSymbol() {
+            const symbol = dom.symbolInput.value.trim().toUpperCase();
+            if (symbol && !appState.watchlist.includes(symbol)) {
+                appState.watchlist.push(symbol);
+                dom.symbolInput.value = '';
+                saveState();
+                renderWatchlist();
+                renderDashboardCardSkeleton(symbol);
+                await fetchAndCacheSymbolData(symbol);
+                renderDashboardCard(symbol);
+                showToast(`${symbol} añadido a la watchlist.`, 'success');
+            } else if (appState.watchlist.includes(symbol)) {
+                showToast(`${symbol} ya está en la watchlist.`, 'info');
+            }
+        }
+
+        async function handleWatchlistClick(e) {
+            const target = e.target;
+            const symbolItem = target.closest('.watchlist-item');
+            if (!symbolItem) return;
+            const symbol = symbolItem.dataset.symbol;
+
+            if (target.closest('.remove-symbol-btn')) {
+                e.stopPropagation(); // Evita que el LI también reciba el click
+                appState.watchlist = appState.watchlist.filter(s => s !== symbol);
+                if (appState.selectedSymbol === symbol) appState.selectedSymbol = null;
+                delete appState.marketDataCache[symbol];
+                delete appState.analysisHistory[symbol];
+                saveState();
+                await renderView();
+                showToast(`${symbol} eliminado.`, 'info');
+            } else {
+                appState.selectedSymbol = symbol;
+                appState.activeView = 'detailed-chart';
+                saveState();
+                await renderView();
+            }
+        }
+        
+        // --- LÓGICA DE NAVEGACIÓN Y RENDERIZADO ---
+        async function handleNavClick(e) {
+            if (e.target.tagName === 'BUTTON') {
+                const viewId = e.target.dataset.view;
+                appState.activeView = viewId;
+                saveState();
+                await renderView();
+            }
+        }
+
+        async function renderView() {
+            document.querySelectorAll('.nav-button').forEach(btn => {
+                btn.classList.toggle('nav-button-active', btn.dataset.view === appState.activeView);
+            });
+
+            document.querySelectorAll('.view').forEach(view => view.classList.add('hidden'));
+
+            const viewElement = document.getElementById(`${appState.activeView}-view`);
+            if (viewElement) {
+                viewElement.classList.remove('hidden');
+            }
+
+            switch (appState.activeView) {
+                case 'dashboard': renderDashboard(); break;
+                case 'detailed-chart': await renderDetailedChartView(); break;
+                case 'simulator': renderSimulatorView(); break;
+                case 'explorer': renderExplorerView(); break;
+                case 'history': renderHistoryView(); break;
+            }
+            renderWatchlist();
+        }
+
+        // --- RENDERIZADO DE COMPONENTES UI ---
+        function renderSidebarControls() {
+            document.querySelector(`input[name="fmp-api-key"][value="${appState.selectedFmpApiKey}"]`).checked = true;
+            document.querySelector(`input[name="gemini-model"][value="${appState.selectedGeminiModel}"]`).checked = true;
+        }
+
+        function renderWatchlist() {
+            dom.watchlist.innerHTML = appState.watchlist.map(symbol => `
+                <li class="watchlist-item flex justify-between items-center p-2 rounded-lg cursor-pointer hover:bg-gray-700 ${appState.selectedSymbol === symbol ? 'bg-indigo-600' : ''}" data-symbol="${symbol}">
+                    <span class="font-semibold pointer-events-none">${symbol}</span>
+                    <button class="remove-symbol-btn text-gray-400 hover:text-white p-1 rounded-full flex items-center justify-center w-5 h-5">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </li>
+            `).join('');
+        }
+
+        function renderDashboard() {
+            if (appState.watchlist.length === 0) {
+                dom.dashboardGrid.innerHTML = `<p class="col-span-full text-center text-gray-500">Añade símbolos a tu watchlist para empezar.</p>`;
+                return;
+            }
+            dom.dashboardGrid.innerHTML = '';
+            appState.watchlist.forEach(symbol => renderDashboardCardSkeleton(symbol));
+            appState.watchlist.forEach(symbol => renderDashboardCard(symbol));
+        }
+
+        function renderDashboardCardSkeleton(symbol) {
+            const cardHTML = createDashboardCard(symbol);
+            dom.dashboardGrid.insertAdjacentHTML('beforeend', cardHTML);
+        }
+
+        function renderDashboardCard(symbol) {
+            const cardHTML = createDashboardCard(symbol);
+            const existingCard = document.getElementById(`card-${symbol}`);
+            if (existingCard) {
+                existingCard.outerHTML = cardHTML;
+            } else {
+                dom.dashboardGrid.insertAdjacentHTML('beforeend', cardHTML);
+            }
+            
+            document.getElementById(`refresh-btn-${symbol}`)?.addEventListener('click', (e) => { e.stopPropagation(); updateQuoteForSymbol(symbol); });
+            document.getElementById(`analyze-btn-${symbol}`)?.addEventListener('click', (e) => { e.stopPropagation(); analyzeWithAI(symbol); });
+            document.getElementById(`send-to-simulator-btn-${symbol}`)?.addEventListener('click', (e) => { e.stopPropagation(); sendToSimulator(symbol); });
+            renderSparkline(symbol);
+        }
+
+        function createDashboardCard(symbol) {
+            const data = appState.marketDataCache[symbol];
+            const lastAnalysis = appState.analysisHistory[symbol]?.[appState.analysisHistory[symbol].length - 1];
+            
+            const price = data?.price ?? '...';
+            const change = data?.changesPercentage ?? 0;
+            const changeColor = change >= 0 ? 'text-green-400' : 'text-red-400';
+            const changeSign = change >= 0 ? '+' : '';
+
+            const recommendation = lastAnalysis?.recommendation ?? 'SIN ANÁLISIS';
+            const badgeColor = {
+                'COMPRA FUERTE': 'bg-green-600', 'COMPRA': 'bg-green-500',
+                'MANTENER': 'bg-yellow-500',
+                'VENTA': 'bg-red-500', 'VENTA FUERTE': 'bg-red-600',
+                'SIN ANÁLISIS': 'bg-gray-500'
+            }[recommendation];
+
+            return `
+                <div id="card-${symbol}" class="bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="text-lg font-bold text-white">${symbol}</h3>
+                            <button id="refresh-btn-${symbol}" class="text-gray-400 hover:text-white">🔄</button>
+                        </div>
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="text-2xl font-bold ${changeColor}">${typeof price === 'number' ? price.toFixed(2) : price}</div>
+                                <div class="text-sm ${changeColor}">${typeof change === 'number' ? `${changeSign}${change.toFixed(2)}%` : '...'}</div>
+                            </div>
+                            <div class="text-xs font-bold text-white px-2 py-1 rounded ${badgeColor}">${recommendation}</div>
+                        </div>
+                        <div class="h-16 my-4">
+                            <canvas id="sparkline-${symbol}"></canvas>
+                        </div>
+                        <div class="text-xs text-gray-400 space-y-1">
+                            <p><strong>Tipo Análisis:</strong> ${lastAnalysis?.analysisType ?? 'N/A'}</p>
+                            <p><strong>Confianza IA:</strong> ${lastAnalysis?.confidence ?? 'N/A'}</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex space-x-2">
+                        <button id="analyze-btn-${symbol}" class="flex-1 bg-gray-700 hover:bg-gray-600 text-sm py-2 rounded-lg flex items-center justify-center space-x-1">
+                            <span>🔄 Analizar con IA</span>
+                            <div id="analyze-loader-${symbol}" class="loader hidden"></div>
+                        </button>
+                        <button id="send-to-simulator-btn-${symbol}" class="bg-indigo-600 hover:bg-indigo-700 p-2 rounded-lg text-xl">
+                            🚀
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderSparkline(symbol) {
+            const canvas = document.getElementById(`sparkline-${symbol}`);
+            if (!canvas) return;
+
+            const fullHistory = appState.marketDataCache[symbol]?.fullHistory;
+            if (!fullHistory || fullHistory.length === 0) return;
+
+            const history = fullHistory.slice(-30);
+            const data = history.map(h => h.close);
+            const labels = history.map(h => h.date);
+            
+            const change = data.length > 1 ? data[data.length - 1] - data[0] : 0;
+            const color = change >= 0 ? 'rgba(74, 222, 128, 1)' : 'rgba(248, 113, 113, 1)';
+
+            if (chartInstances[`sparkline-${symbol}`]) chartInstances[`sparkline-${symbol}`].destroy();
+            chartInstances[`sparkline-${symbol}`] = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        borderColor: color,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                    scales: { x: { display: false }, y: { display: false } }
+                }
+            });
+        }
+
+        // --- VISTA ANÁLISIS DETALLADO ---
+        async function renderDetailedChartView() {
+            const symbol = appState.selectedSymbol;
+            if (!symbol) {
+                dom.detailedChartView.innerHTML = `<div class="flex items-center justify-center h-full"><p class="text-xl text-gray-500">Selecciona un símbolo para ver el análisis detallado.</p></div>`;
+                return;
+            }
+
+            dom.detailedChartView.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-3xl font-bold text-white">Análisis Detallado: ${symbol}</h2>
+                        <button id="analyze-symbol-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
+                            <span>Analizar con IA</span>
+                            <div id="symbol-loader" class="loader hidden"></div>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                        <div id="analysis-result-container" class="lg:col-span-3 bg-gray-800 p-6 rounded-lg space-y-4"></div>
+                        <div id="trade-plan-container" class="lg:col-span-2 bg-gray-800 p-6 rounded-lg space-y-4"></div>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="bg-gray-800 p-2 rounded-lg flex justify-between items-center">
+                            <div id="timeframe-selector" class="flex space-x-1">
+                                ${['1M', '6M', '1A', '5A', 'MAX'].map(tf => `<button data-tf="${tf}" class="timeframe-btn px-3 py-1 text-sm rounded-md bg-gray-700 hover:bg-gray-600">${tf}</button>`).join('')}
+                            </div>
+                            <div id="indicator-toggles" class="flex space-x-4 text-sm">
+                                <label class="flex items-center"><input type="checkbox" data-indicator="sma" class="indicator-toggle form-checkbox h-4 w-4 text-indigo-600 bg-gray-700 border-gray-600 rounded"> <span class="ml-2">Medias Móviles</span></label>
+                                <label class="flex items-center"><input type="checkbox" data-indicator="volume" class="indicator-toggle form-checkbox h-4 w-4 text-indigo-600 bg-gray-700 border-gray-600 rounded"> <span class="ml-2">Volumen</span></label>
+                                <label class="flex items-center"><input type="checkbox" data-indicator="macd" class="indicator-toggle form-checkbox h-4 w-4 text-indigo-600 bg-gray-700 border-gray-600 rounded"> <span class="ml-2">MACD</span></label>
+                                <label class="flex items-center"><input type="checkbox" data-indicator="rsi" class="indicator-toggle form-checkbox h-4 w-4 text-indigo-600 bg-gray-700 border-gray-600 rounded"> <span class="ml-2">RSI</span></label>
+                            </div>
+                        </div>
+                        <div class="bg-gray-800 p-4 rounded-lg space-y-4">
+                            <div style="height: 400px;"><canvas id="price-chart"></canvas></div>
+                            <div id="volume-chart-container" style="height: 100px;"><canvas id="volume-chart"></canvas></div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <div id="macd-chart-container" style="height: 200px;"><canvas id="macd-chart"></canvas></div>
+                                <div id="rsi-chart-container" style="height: 200px;"><canvas id="rsi-chart"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            
+            document.getElementById('analyze-symbol-btn').addEventListener('click', () => analyzeWithAI(symbol));
+            document.getElementById('timeframe-selector').addEventListener('click', handleTimeframeChange);
+            document.getElementById('indicator-toggles').addEventListener('change', handleIndicatorToggle);
+
+            await fetchAndCacheSymbolData(symbol);
+            renderAIAnalysis(symbol);
+            renderAllCharts(symbol);
+        }
+        
+        function renderAIAnalysis(symbol) {
+            const analysisContainer = document.getElementById('analysis-result-container');
+            const tradePlanContainer = document.getElementById('trade-plan-container');
+            if (!analysisContainer || !tradePlanContainer) return;
+
+            const lastAnalysis = appState.analysisHistory[symbol]?.[appState.analysisHistory[symbol].length - 1];
+
+            if (!lastAnalysis) {
+                analysisContainer.innerHTML = `<h3 class="text-xl font-semibold text-white">Análisis de IA</h3><p class="text-gray-400">No hay análisis disponible. Haz clic en "Analizar con IA" para generar uno.</p>`;
+                tradePlanContainer.innerHTML = `<h3 class="text-xl font-semibold text-white">Plan de Trading</h3><p class="text-gray-400">N/A</p>`;
+                return;
+            }
+
+            const recColor = { 'COMPRA': 'text-green-400', 'COMPRA FUERTE': 'text-green-400', 'VENTA': 'text-red-400', 'VENTA FUERTE': 'text-red-400', 'MANTENER': 'text-yellow-400' }[lastAnalysis.recommendation] || 'text-gray-300';
+            const confColor = { 'ALTA': 'text-green-400', 'MEDIA': 'text-yellow-400', 'BAJA': 'text-red-400' }[lastAnalysis.confidence] || 'text-gray-300';
+
+            analysisContainer.innerHTML = `
+                <h3 class="text-xl font-semibold text-white">Tesis de Inversión</h3>
+                <p class="italic text-gray-300">"${lastAnalysis.thesis || 'N/A'}"</p>
+                <div class="flex space-x-8">
+                    <div><h4 class="text-sm text-gray-400">Recomendación</h4><p class="text-lg font-bold ${recColor}">${lastAnalysis.recommendation || 'N/A'}</p></div>
+                    <div><h4 class="text-sm text-gray-400">Confianza</h4><p class="text-lg font-bold ${confColor}">${lastAnalysis.confidence || 'N/A'}</p></div>
+                </div>
+                <div><h4 class="text-lg font-semibold text-white mt-2">Justificación Detallada</h4><p class="text-sm text-gray-400 whitespace-pre-wrap">${lastAnalysis.detailedJustification || 'N/A'}</p></div>
+                <div><h4 class="text-lg font-semibold text-white mt-2">Riesgos Identificados</h4><p class="text-sm text-gray-400 whitespace-pre-wrap">${lastAnalysis.identifiedRisks || 'N/A'}</p></div>`;
+
+            tradePlanContainer.innerHTML = `
+                <h3 class="text-xl font-semibold text-white">Plan de Trading Sugerido</h3>
+                <div class="space-y-3">
+                    <div><h4 class="text-sm font-semibold text-indigo-400">Punto de Entrada</h4><p>${lastAnalysis.tradePlan?.entryPoint || 'N/A'}</p></div>
+                    <div><h4 class="text-sm font-semibold text-red-400">Stop-Loss (SL)</h4><p>${lastAnalysis.tradePlan?.stopLoss || 'N/A'}</p></div>
+                    <div><h4 class="text-sm font-semibold text-green-400">Take-Profit 1 (TP1)</h4><p>${lastAnalysis.tradePlan?.takeProfit1 || 'N/A'}</p></div>
+                    <div><h4 class="text-sm font-semibold text-green-300">Take-Profit 2 (TP2)</h4><p>${lastAnalysis.tradePlan?.takeProfit2 || 'N/A'}</p></div>
+                </div>`;
+        }
+        
+        function handleTimeframeChange(e) {
+            if (e.target.tagName === 'BUTTON') {
+                appState.chartSettings.timeframe = e.target.dataset.tf;
+                saveState();
+                renderAllCharts(appState.selectedSymbol);
+            }
+        }
+
+        function handleIndicatorToggle(e) {
+            if (e.target.classList.contains('indicator-toggle')) {
+                appState.chartSettings.indicators[e.target.dataset.indicator] = e.target.checked;
+                saveState();
+                renderAllCharts(appState.selectedSymbol);
+            }
+        }
+
+        // --- LÓGICA DE GRÁFICOS ---
+        async function renderAllCharts(symbol) {
+            document.querySelectorAll('.timeframe-btn').forEach(btn => btn.classList.toggle('timeframe-btn-active', btn.dataset.tf === appState.chartSettings.timeframe));
+            document.querySelectorAll('.indicator-toggle').forEach(chk => chk.checked = !!appState.chartSettings.indicators[chk.dataset.indicator]);
+            
+            const isOneMonth = appState.chartSettings.timeframe === '1M';
+            const dataCache = appState.marketDataCache[symbol];
+            
+            let sourceData = (isOneMonth && dataCache?.history4H) ? dataCache.history4H : dataCache?.fullHistory;
+            
+            if (!sourceData) {
+                await fetchAndCacheSymbolData(symbol); // Asegura que todos los datos estén cargados
+                sourceData = (isOneMonth && dataCache?.history4H) ? dataCache.history4H : dataCache?.fullHistory;
+                if (!sourceData) {
+                    console.error("No se pudieron cargar los datos del gráfico para", symbol);
+                    return;
+                }
+            }
+            
+            const now = new Date();
+            let startDate = new Date();
+            if (!isOneMonth) {
+                 switch (appState.chartSettings.timeframe) {
+                    case '6M': startDate.setMonth(now.getMonth() - 6); break;
+                    case '1A': startDate.setFullYear(now.getFullYear() - 1); break;
+                    case '5A': startDate.setFullYear(now.getFullYear() - 5); break;
+                    case 'MAX': startDate = new Date(0); break;
+                }
+            } else {
+                 startDate.setMonth(now.getMonth() - 1);
+            }
+
+
+            const startIndex = sourceData.findIndex(d => new Date(d.date) >= startDate);
+            if (startIndex === -1 && sourceData.length > 0) { // Si no hay datos en el rango, muestra los últimos datos disponibles
+                 const calculationBuffer = 200;
+                 const calculationStartIndex = Math.max(0, sourceData.length - calculationBuffer);
+                 const calculationData = sourceData.slice(calculationStartIndex);
+                 const calculationCloses = calculationData.map(d => d.close);
+                 const trimIndex = Math.max(0, calculationData.length - 1); // Solo el último punto si no hay rango
+
+                 const sma50 = calculateSMA(calculationCloses, 50).slice(trimIndex);
+                 const sma200 = calculateSMA(calculationCloses, 200).slice(trimIndex);
+                 const rsi = calculateRSI(calculationCloses, 14).slice(trimIndex);
+                 const macd_ext = calculateMACD(calculationCloses);
+                 const macd = {
+                    macdLine: macd_ext.macdLine.slice(trimIndex),
+                    signalLine: macd_ext.signalLine.slice(trimIndex),
+                    histogram: macd_ext.histogram.slice(trimIndex)
+                 };
+                 renderPriceAndVolumeCharts(symbol, calculationData.slice(trimIndex), sma50, sma200);
+                 renderIndicatorCharts(calculationData.slice(trimIndex), macd, rsi);
+                 return;
+            }
+
+
+            const calculationBuffer = 200;
+            const calculationStartIndex = Math.max(0, startIndex - calculationBuffer);
+            const calculationData = sourceData.slice(calculationStartIndex);
+            const calculationCloses = calculationData.map(d => d.close);
+            const trimIndex = startIndex - calculationStartIndex;
+
+            const filteredData = calculationData.slice(trimIndex);
+            const sma50 = calculateSMA(calculationCloses, 50).slice(trimIndex);
+            const sma200 = calculateSMA(calculationCloses, 200).slice(trimIndex);
+            const rsi = calculateRSI(calculationCloses, 14).slice(trimIndex);
+            const macd_ext = calculateMACD(calculationCloses);
+            const macd = {
+                macdLine: macd_ext.macdLine.slice(trimIndex),
+                signalLine: macd_ext.signalLine.slice(trimIndex),
+                histogram: macd_ext.histogram.slice(trimIndex)
+            };
+            
+            renderPriceAndVolumeCharts(symbol, filteredData, sma50, sma200);
+            renderIndicatorCharts(filteredData, macd, rsi);
+        }
+
+        function renderPriceAndVolumeCharts(symbol, data, sma50, sma200) {
+            ['price-chart', 'volume-chart'].forEach(id => {
+                if (chartInstances[id]) chartInstances[id].destroy();
+            });
+
+            const priceCtx = document.getElementById('price-chart')?.getContext('2d');
+            const volumeCtx = document.getElementById('volume-chart')?.getContext('2d');
+            const volumeContainer = document.getElementById('volume-chart-container');
+            if (!priceCtx || !volumeCtx || !volumeContainer) return;
+            
+            const chartData = data.map(d => ({ x: new Date(d.date).getTime(), o: d.open, h: d.high, l: d.low, c: d.close }));
+            const volumeData = data.map(d => ({ x: new Date(d.date).getTime(), y: d.volume }));
+            
+            const datasets = [{
+                type: 'candlestick', label: symbol, data: chartData,
+                color: { up: '#22c55e', down: '#ef4444', unchanged: '#9ca3af' }
+            }];
+
+            if (appState.chartSettings.indicators.sma) {
+                datasets.push({ type: 'line', label: 'SMA 50', data: data.map((d, i) => ({ x: new Date(d.date).getTime(), y: sma50[i] })), borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0 });
+                datasets.push({ type: 'line', label: 'SMA 200', data: data.map((d, i) => ({ x: new Date(d.date).getTime(), y: sma200[i] })), borderColor: '#a855f7', borderWidth: 1.5, pointRadius: 0 });
+            }
+
+            chartInstances['price-chart'] = new Chart(priceCtx, {
+                type: 'candlestick', data: { datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { type: 'time', time: { unit: appState.chartSettings.timeframe === '1M' ? 'day' : 'month' }, ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                    },
+                    plugins: { legend: { labels: { color: '#d1d5db' } } }
+                }
+            });
+
+            volumeContainer.style.display = appState.chartSettings.indicators.volume ? 'block' : 'none';
+            if (appState.chartSettings.indicators.volume) {
+                 chartInstances['volume-chart'] = new Chart(volumeCtx, {
+                    type: 'bar',
+                    data: {
+                        datasets: [{ label: 'Volumen', data: volumeData, backgroundColor: (ctx) => chartData[ctx.dataIndex]?.c > chartData[ctx.dataIndex]?.o ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)' }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            x: { type: 'time', display: false, grid: { display: false } },
+                            y: { ticks: { color: '#9ca3af', callback: (value) => new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(value) }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                        },
+                        plugins: { legend: { display: false }, tooltip: { enabled: true } }
+                    }
+                });
+            }
+        }
+
+        function renderIndicatorCharts(data, macd, rsi) {
+            ['macd-chart', 'rsi-chart'].forEach(id => {
+                if (chartInstances[id]) chartInstances[id].destroy();
+            });
+
+            const macdContainer = document.getElementById('macd-chart-container');
+            const rsiContainer = document.getElementById('rsi-chart-container');
+            const macdCtx = document.getElementById('macd-chart')?.getContext('2d');
+            const rsiCtx = document.getElementById('rsi-chart')?.getContext('2d');
+            if (!macdCtx || !rsiCtx || !macdContainer || !rsiContainer) return;
+            
+            const labels = data.map(d => new Date(d.date).getTime());
+
+            macdContainer.style.display = appState.chartSettings.indicators.macd ? 'block' : 'none';
+            if (appState.chartSettings.indicators.macd) {
+                chartInstances['macd-chart'] = new Chart(macdCtx, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { type: 'line', label: 'MACD', data: macd.macdLine, borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0, yAxisID: 'y' },
+                            { type: 'line', label: 'Señal', data: macd.signalLine, borderColor: '#f97316', borderWidth: 1.5, pointRadius: 0, yAxisID: 'y' },
+                            { label: 'Histograma', data: macd.histogram, backgroundColor: (ctx) => macd.histogram[ctx.dataIndex] >= 0 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)', yAxisID: 'y' }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: { x: { display: false }, y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.1)' } } },
+                        plugins: { legend: { labels: { color: '#d1d5db' } } }
+                    }
+                });
+            }
+            
+            rsiContainer.style.display = appState.chartSettings.indicators.rsi ? 'block' : 'none';
+            if (appState.chartSettings.indicators.rsi) {
+                chartInstances['rsi-chart'] = new Chart(rsiCtx, {
+                    type: 'line',
+                    data: { labels, datasets: [{ label: 'RSI', data: rsi, borderColor: '#a855f7', borderWidth: 1.5, pointRadius: 0 }] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            x: { display: false },
+                            y: { min: 0, max: 100, ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                        },
+                        plugins: { legend: { labels: { color: '#d1d5db' } } }
+                    }
+                });
+            }
+        }
+
+        // --- SIMULADOR ---
+        function renderSimulatorView() {
+            dom.investmentAmountInput.value = appState.investmentAmount;
+            if (appState.simulatorOpportunities.length === 0) {
+                dom.simulatorGrid.innerHTML = `<p class="col-span-full text-center text-gray-500">Envía oportunidades desde el dashboard con el botón 🚀 para simular.</p>`;
+                return;
+            }
+
+            dom.simulatorGrid.innerHTML = appState.simulatorOpportunities.map(symbol => {
+                const data = appState.marketDataCache[symbol];
+                const lastAnalysis = appState.analysisHistory[symbol]?.[appState.analysisHistory[symbol].length - 1];
+                const price = data?.price;
+                const sl_num = lastAnalysis?.tradePlan?.stopLoss_num;
+                const tp1_num = lastAnalysis?.tradePlan?.takeProfit1_num;
+                const tp2_num = lastAnalysis?.tradePlan?.takeProfit2_num;
+                const investment = appState.investmentAmount;
+
+                let sharesToBuy = 'N/A';
+                let lossSL = 'Dato no disponible';
+                let profit1 = 'Dato no disponible';
+                let profit2 = 'Dato no disponible';
+                let targetSL = 'N/A';
+                let target1 = 'N/A';
+                let target2 = 'N/A';
+
+                if (typeof price === 'number' && price > 0) {
+                    sharesToBuy = (investment / price).toFixed(4);
+                    if (typeof sl_num === 'number') {
+                        lossSL = `${((sl_num - price) * sharesToBuy).toFixed(2)} USD`;
+                        targetSL = `${sl_num.toFixed(2)} USD`;
+                    }
+                    if (typeof tp1_num === 'number') {
+                        profit1 = `${((tp1_num - price) * sharesToBuy).toFixed(2)} USD`;
+                        target1 = `${tp1_num.toFixed(2)} USD`;
+                    }
+                    if (typeof tp2_num === 'number') {
+                        profit2 = `${((tp2_num - price) * sharesToBuy).toFixed(2)} USD`;
+                        target2 = `${tp2_num.toFixed(2)} USD`;
+                    }
+                }
+                
+                return `
+                    <div class="bg-gray-700 p-4 rounded-lg space-y-2 flex flex-col">
+                        <div class="flex justify-between items-center">
+                            <h4 class="text-lg font-bold">${symbol}</h4>
+                            <button class="remove-from-sim-btn text-gray-400 hover:text-white" data-symbol="${symbol}">&times;</button>
+                        </div>
+                        <p class="text-sm"><strong>Precio Actual:</strong> ${price?.toFixed(2) ?? 'N/A'} USD</p>
+                        <p class="text-sm"><strong>Acciones a comprar:</strong> ${sharesToBuy}</p>
+                        
+                        <div class="border-t border-gray-600 my-2 pt-2">
+                            <p class="text-sm"><strong>Objetivo TPF 1:</strong> ${target1}</p>
+                            <p class="text-green-400 font-semibold"><strong>Ganancia Potencial:</strong> ${profit1}</p>
+                        </div>
+                        <div class="border-t border-gray-600 my-2 pt-2">
+                            <p class="text-sm"><strong>Objetivo TPF 2:</strong> ${target2}</p>
+                            <p class="text-emerald-400 font-semibold"><strong>Ganancia Potencial:</strong> ${profit2}</p>
+                        </div>
+                         <div class="border-t border-gray-600 my-2 pt-2 mt-auto">
+                            <p class="text-sm"><strong>Stop Loss (SL):</strong> ${targetSL}</p>
+                            <p class="text-red-400 font-semibold"><strong>Pérdida Potencial:</strong> ${lossSL}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.querySelectorAll('.remove-from-sim-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const symbol = e.target.dataset.symbol;
+                    appState.simulatorOpportunities = appState.simulatorOpportunities.filter(s => s !== symbol);
+                    saveState();
+                    renderSimulatorView();
+                });
+            });
+        }
+
+        function handleInvestmentAmountChange(e) {
+            const amount = parseFloat(e.target.value);
+            if (!isNaN(amount) && amount > 0) {
+                appState.investmentAmount = amount;
+                saveState();
+                renderSimulatorView();
+            }
+        }
+
+        function sendToSimulator(symbol) {
+            const lastAnalysis = appState.analysisHistory[symbol]?.[appState.analysisHistory[symbol].length - 1];
+            
+            if (!lastAnalysis) {
+                showToast(`Primero analiza ${symbol} para poder simularlo.`, 'error');
+                return;
+            }
+            if (typeof lastAnalysis.tradePlan?.takeProfit1_num !== 'number' && typeof lastAnalysis.tradePlan?.takeProfit2_num !== 'number') {
+                showToast(`No se encontraron datos numéricos del plan de trading en el análisis.`, 'error');
+                return;
+            }
+            if (appState.simulatorOpportunities.includes(symbol)) {
+                showToast(`${symbol} ya está en el simulador.`, 'info');
+                return;
+            }
+
+            appState.simulatorOpportunities.push(symbol);
+            saveState();
+            if (appState.activeView === 'simulator') {
+                renderSimulatorView();
+            }
+            showToast(`${symbol} añadido al simulador.`, 'success');
+        }
+
+        function clearSimulator() {
+            appState.simulatorOpportunities = [];
+            saveState();
+            renderSimulatorView();
+            showToast('Simulador limpiado.', 'info');
+        }
+
+        // --- HISTORIAL ---
+        function renderHistoryView() {
+            const container = document.getElementById('history-view');
+            const symbolsWithHistory = Object.keys(appState.analysisHistory).filter(symbol => appState.analysisHistory[symbol]?.length > 0);
+
+            let content = `<h2 class="text-3xl font-bold text-white mb-6">Historial de Análisis IA</h2>`;
+            if (symbolsWithHistory.length === 0) {
+                content += `<p class="text-gray-500 text-center">No hay análisis guardados en el historial.</p>`;
+                container.innerHTML = content;
+                return;
+            }
+
+            content += `<div class="space-y-4">`;
+            symbolsWithHistory.forEach(symbol => {
+                const history = [...appState.analysisHistory[symbol]].reverse(); // Newest first
+                const lastFive = history.slice(0, 5);
+                const recommendationCircles = lastFive.map(a => {
+                    const color = {'COMPRA': 'bg-green-500', 'VENTA': 'bg-red-500', 'MANTENER': 'bg-yellow-500'}[a.recommendation.split(' ')[0]] || 'bg-gray-500';
+                    return `<span class="w-3 h-3 rounded-full ${color}" title="${new Date(a.timestamp).toLocaleDateString()}: ${a.recommendation}"></span>`;
+                }).join('');
+
+                content += `
+                    <div class="bg-gray-800 rounded-lg">
+                        <div class="toggle-history-btn p-4 flex justify-between items-center cursor-pointer" data-target="history-table-${symbol}">
+                            <div class="flex items-center space-x-4">
+                                <h3 class="text-2xl font-bold text-white">${symbol}</h3>
+                                <div class="flex space-x-1.5">${recommendationCircles}</div>
+                            </div>
+                            <button class="text-2xl text-indigo-400 pointer-events-none">+</button>
+                        </div>
+                        <div id="history-table-${symbol}" class="hidden p-4 border-t border-gray-900">
+                            <table class="w-full text-left">
+                                <thead><tr class="border-b border-gray-600"><th class="py-2 px-2">Fecha</th><th class="py-2 px-2">Decisión</th><th></th></tr></thead>
+                                <tbody>${history.map((a, i) => `
+                                    <tr class="border-b border-gray-700">
+                                        <td class="py-3 px-2 text-sm">${new Date(a.timestamp).toLocaleString()}</td>
+                                        <td class="py-3 px-2 font-semibold">${a.recommendation}</td>
+                                        <td class="py-3 px-2 text-right"><button class="toggle-justification-btn text-indigo-400 text-2xl" data-target="justification-${symbol}-${i}">+</button></td>
+                                    </tr>
+                                    <tr id="justification-${symbol}-${i}" class="hidden"><td colspan="3" class="p-4 bg-gray-700 text-xs">
+                                        <p class="font-bold mb-1">Justificación:</p><p class="mb-3 whitespace-pre-wrap">${a.detailedJustification}</p>
+                                        <p class="font-bold mb-1">Plan de Trading:</p><p class="whitespace-pre-wrap">Entrada: ${a.tradePlan.entryPoint}<br>Stop-Loss: ${a.tradePlan.stopLoss}<br>TP1: ${a.tradePlan.takeProfit1}<br>TP2: ${a.tradePlan.takeProfit2}</p>
+                                    </td></tr>
+                                `).join('')}</tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            });
+            content += `</div>`;
+            container.innerHTML = content;
+        }
+
+        function handleHistoryToggle(btn) {
+            const targetId = btn.dataset.target;
+            const content = document.getElementById(targetId);
+            const buttonIcon = btn.querySelector('button');
+            if (content) {
+                content.classList.toggle('hidden');
+                buttonIcon.textContent = content.classList.contains('hidden') ? '+' : '-';
+            }
+        }
+
+        function handleJustificationToggle(btn) {
+            const targetId = btn.dataset.target;
+            const contentRow = document.getElementById(targetId);
+            if (contentRow) {
+                contentRow.classList.toggle('hidden');
+                btn.textContent = contentRow.classList.contains('hidden') ? '+' : '-';
+            }
+        }
+
+        // --- EXPLORADOR IA ---
+        function renderExplorerView() {
+            if (appState.weeklyReports.length === 0) {
+                dom.reportsContainer.innerHTML = `<p class="text-center text-gray-500">Carga un informe en PDF para que la IA lo analice.</p>`;
+                return;
+            }
+            dom.reportsContainer.innerHTML = appState.weeklyReports.map((report, index) => `
+                <div class="bg-gray-700 rounded-lg overflow-hidden">
+                    <div class="report-header p-4 cursor-pointer flex justify-between items-center hover:bg-gray-600" data-index="${index}">
+                        <h4 class="font-semibold">Informe - ${new Date(report.date).toLocaleString()}</h4>
+                        <span class="transform transition-transform">▼</span>
+                    </div>
+                    <div class="report-content hidden p-4 border-t border-gray-600">
+                        <button class="view-full-report-btn mb-4 bg-blue-600 hover:bg-blue-700 text-white text-sm py-1 px-3 rounded-lg" data-index="${index}">Ver Informe Completo</button>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            ${createReportColumn('Comprar', report.analysis.comprar, 'green')}
+                            ${createReportColumn('Mantener', report.analysis.mantener, 'yellow')}
+                            ${createReportColumn('Vender', report.analysis.vender, 'red')}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function createReportColumn(title, items, color) {
+            return `
+                <div>
+                    <h5 class="font-bold text-${color}-400 mb-2">${title}</h5>
+                    <ul class="space-y-2">
+                        ${(items && items.length > 0) ? items.map(item => {
+                            const isInWatchlist = appState.watchlist.includes(item.ticker);
+                            return `
+                                <li class="flex items-center justify-between bg-gray-800 p-2 rounded">
+                                    <div>
+                                        <span class="font-bold">${item.ticker}</span>
+                                        <p class="text-xs text-gray-400">${item.name || ''}</p>
+                                    </div>
+                                    <button class="add-from-report-btn p-1 rounded ${isInWatchlist ? 'bg-gray-600 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500'}" data-symbol="${item.ticker}" ${isInWatchlist ? 'disabled' : ''}>
+                                        ${isInWatchlist ? '✓' : '+'}
+                                    </button>
+                                </li>`;
+                        }).join('') : `<li class="text-xs text-gray-500">Ninguno</li>`}
+                    </ul>
+                </div>`;
+        }
+        
+        async function handleReportUpload(event) {
+            const file = event.target.files[0];
+            if (!file || file.type !== 'application/pdf') {
+                showToast('Por favor, selecciona un archivo PDF.', 'error');
+                return;
+            }
+            
+            dom.reportLoader.classList.remove('hidden');
+            try {
+                const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.mjs');
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.mjs`;
+
+                const arrayBuffer = await file.arrayBuffer();
+                const typedarray = new Uint8Array(arrayBuffer);
+                const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                let textContent = '';
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const text = await page.getTextContent();
+                    textContent += text.items.map(item => item.str).join(' ');
+                }
+                showToast('Texto del PDF extraído, enviando a la IA...', 'info');
+                await processReportWithAI(textContent);
+
+            } catch (error) {
+                console.error("Error al procesar PDF:", error);
+                showToast(`Error al procesar PDF: ${error.message}`, 'error');
+            } finally {
+                dom.reportLoader.classList.add('hidden');
+                event.target.value = ''; // Reset file input
+            }
+        }
+        
+        async function processReportWithAI(reportText) {
+            showToast('IA está analizando el informe...', 'info');
+            const prompt = `
+                Actúa como un sistema de extracción de datos de máxima precisión. Tu única misión es analizar el texto de un informe financiero y extraer los tickers de acciones para las categorías 'comprar', 'mantener' y 'vender'.
+
+                **Directiva Crítica:**
+                El informe que estás analizando CONTIENE aproximadamente 20 tickers para cada categoría (comprar, mantener, vender). Tu objetivo principal es encontrar y listar TODOS los tickers posibles para cada una. No te detengas después de encontrar solo unos pocos. Debes ser exhaustivo.
+
+                **Instrucciones Avanzadas de Extracción:**
+                1.  **Reconocimiento de Categorías Flexibles:** Las categorías no siempre estarán claramente etiquetadas. Debes inferirlas a partir del contexto.
+                    * **Comprar (BUY):** Busca títulos como "Top Picks", "Acciones para Comprar", "Recomendaciones Fuertes", "Sobreponderar" (Overweight), "Mejores Ideas", o párrafos con un sentimiento claramente alcista (bullish) que listen acciones.
+                    * **Mantener (HOLD):** Busca títulos como "Neutral", "Mantener Posición", "Rendimiento de Mercado" (Market Perform), o párrafos con un sentimiento neutral que listen acciones.
+                    * **Vender (SELL):** Busca títulos como "Acciones para Vender", "Reducir Exposición", "Infraponderar" (Underweight), "Recomendaciones Negativas", o párrafos con un sentimiento claramente bajista (bearish) que listen acciones.
+                2.  **Identificación de Tickers:** Los tickers son símbolos de 1 a 5 letras mayúsculas (ej: GOOGL, MSFT, TSLA). Pueden estar en listas, tablas, entre paréntesis después del nombre de una empresa (ej: "Apple (AAPL)"), o en una secuencia separada por comas. Extrae únicamente el ticker.
+                3.  **Escaneo Completo:** Lee el texto completo. Las listas de tickers pueden aparecer en diferentes secciones. Agrega todos los que encuentres a la categoría correspondiente.
+                4.  **Formato de Salida Obligatorio:** Tu respuesta DEBE SER ÚNICAMENTE un objeto JSON válido, sin texto introductorio ni explicaciones. La estructura debe ser exactamente esta:
+                    {
+                      "comprar": ["TICKER1", "TICKER2", ...],
+                      "mantener": ["TICKER3", "TICKER4", ...],
+                      "vender": ["TICKER5", "TICKER6", ...]
+                    }
+                5.  **Manejo de Ausencia:** Si, después de una búsqueda exhaustiva, no encuentras tickers para una categoría, devuelve un array vacío \`[]\` para esa clave.
+
+                **Ejemplo de razonamiento:**
+                - Si encuentras una sección titulada "Nuestras mejores ideas alcistas para el trimestre", los tickers que siguen deben ir en la categoría "comprar".
+                - Si un párrafo dice "Somos cautelosos con el sector tecnológico y recomendamos reducir la exposición en TSLA y NVDA", esos tickers deben ir en "vender".
+
+                **Texto del informe a analizar:**
+                ---
+                ${reportText.substring(0, 25000)} 
+                ---
+            `;
+            try {
+                const analysis = await callGeminiAPI(prompt, "application/json");
+                
+                const allTickers = [...(analysis.comprar || []), ...(analysis.mantener || []), ...(analysis.vender || [])];
+                const uniqueTickers = [...new Set(allTickers)];
+                const enrichedData = await enrichTickerData(uniqueTickers);
+
+                const newReport = {
+                    date: new Date().toISOString(),
+                    rawText: reportText,
+                    analysis: {
+                        comprar: (analysis.comprar || []).map(t => enrichedData[t] || { ticker: t, name: 'Nombre no encontrado' }),
+                        mantener: (analysis.mantener || []).map(t => enrichedData[t] || { ticker: t, name: 'Nombre no encontrado' }),
+                        vender: (analysis.vender || []).map(t => enrichedData[t] || { ticker: t, name: 'Nombre no encontrado' }),
+                    }
+                };
+
+                appState.weeklyReports.unshift(newReport);
+                saveState();
+                renderExplorerView();
+                showToast('Informe analizado y añadido.', 'success');
+            } catch (error) {
+                console.error("Error al analizar informe con IA:", error);
+                showToast(`Error de la IA: ${error.message}`, 'error');
+            }
+        }
+
+        async function enrichTickerData(tickers) {
+            if (tickers.length === 0) return {};
+            const apiKey = getFmpApiKey();
+            const url = `https://financialmodelingprep.com/api/v3/profile/${tickers.join(',')}?apikey=${apiKey}`;
+            try {
+                const res = await fetchWithTimeout(url);
+                if (!res.ok) return {};
+                const data = await res.json();
+                const enriched = {};
+                data.forEach(item => {
+                    enriched[item.symbol] = { ticker: item.symbol, name: item.companyName };
+                });
+                return enriched;
+            } catch (error) {
+                console.error("Error enriqueciendo datos de tickers:", error);
+                return {};
+            }
+        }
+
+        function handleReportCollapse(header) {
+            const content = header.nextElementSibling;
+            content.classList.toggle('hidden');
+            header.querySelector('span').classList.toggle('rotate-180');
+        }
+
+        function handleViewFullReport(btn) {
+            const index = btn.dataset.index;
+            const report = appState.weeklyReports[index];
+            dom.reportModalContent.textContent = report.rawText;
+            dom.reportModal.classList.remove('hidden');
+        }
+
+        async function handleAddFromReport(btn) {
+            if (btn.disabled) return;
+            const symbol = btn.dataset.symbol;
+            if (symbol && !appState.watchlist.includes(symbol)) {
+                appState.watchlist.push(symbol);
+                saveState();
+                renderWatchlist();
+                renderExplorerView(); // Re-render to update button state
+                renderDashboardCardSkeleton(symbol);
+                await fetchAndCacheSymbolData(symbol);
+                renderDashboardCard(symbol);
+                showToast(`${symbol} añadido a la watchlist.`, 'success');
+            }
+        }
+        
+        // --- LÓGICA DE ANÁLISIS IA ---
+        async function analyzeAllSymbols() {
+            dom.analyzeAllLoader.classList.remove('hidden');
+            for (const symbol of appState.watchlist) {
+                await analyzeWithAI(symbol);
+            }
+            dom.analyzeAllLoader.classList.add('hidden');
+            showToast('Análisis en lote completado.', 'success');
+        }
+
+        async function analyzeWithAI(symbol) {
+            const loader = document.getElementById(`analyze-loader-${symbol}`) || document.getElementById('symbol-loader');
+            if (loader) loader.classList.remove('hidden');
+
+            await fetchAndCacheSymbolData(symbol);
+            if (!appState.marketDataCache[symbol]?.fullHistory) {
+                showToast(`Datos de mercado para ${symbol} no disponibles.`, 'error');
+                if (loader) loader.classList.add('hidden');
+                return;
+            }
+            const latestReportText = appState.weeklyReports.length > 0 ? appState.weeklyReports[0].rawText : '';
+
+            try {
+                // Fase 1
+                const descriptiveAnalysis = await getDescriptiveAnalysis(symbol, appState.marketDataCache[symbol], latestReportText);
+                
+                // Fase 2
+                const numericalPlan = await getNumericalTradePlan(descriptiveAnalysis.tradePlan);
+
+                const finalAnalysis = {
+                    ...descriptiveAnalysis,
+                    analysisType: latestReportText ? 'Técnico + Informe' : 'Técnico',
+                    tradePlan: {
+                        ...descriptiveAnalysis.tradePlan,
+                        stopLoss_num: numericalPlan.stopLoss,
+                        takeProfit1_num: numericalPlan.takeProfit1,
+                        takeProfit2_num: numericalPlan.takeProfit2,
+                    },
+                    timestamp: new Date().toISOString()
+                };
+
+                if (!appState.analysisHistory[symbol]) appState.analysisHistory[symbol] = [];
+                appState.analysisHistory[symbol].push(finalAnalysis);
+                saveState();
+                
+                if (appState.activeView === 'dashboard') renderDashboardCard(symbol);
+                if (appState.activeView === 'detailed-chart' && appState.selectedSymbol === symbol) renderAIAnalysis(symbol);
+
+                showToast(`Análisis para ${symbol} completado.`, 'success');
+
+            } catch (error) {
+                console.error(`Error en el análisis de IA para ${symbol}:`, error);
+                showToast(`Fallo el análisis para ${symbol}: ${error.message}`, 'error');
+            } finally {
+                if (loader) loader.classList.add('hidden');
+            }
+        }
+
+        async function callGeminiAPI(prompt, responseMimeType = "application/json") {
+            if (GEMINI_API_KEY === 'TU_API_KEY_DE_GEMINI_AQUI' || GEMINI_API_KEY === '') {
+                throw new Error("API Key de Gemini no configurada.");
+            }
+            const model = appState.selectedGeminiModel;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+            
+            let attempts = 0;
+            const maxAttempts = 5;
+            let delay = 1000; // 1 second
+
+            while(attempts < maxAttempts) {
+                try {
+                    const response = await fetchWithTimeout(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { response_mime_type: responseMimeType }
+                        })
+                    });
+
+                    if (response.status === 503) {
+                        throw new Error(`503: The model is overloaded. Retrying...`);
+                    }
+
+                    if (!response.ok) {
+                        const errorBody = await response.text();
+                        throw new Error(`Error de la API de Gemini: ${response.status} ${errorBody}`);
+                    }
+
+                    const data = await response.json();
+                    try {
+                        const text = data.candidates[0].content.parts[0].text;
+                        const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                        return JSON.parse(cleanedText);
+                    } catch (e) {
+                        console.error("Fallo al parsear la respuesta JSON de Gemini:", data.candidates[0].content.parts[0].text);
+                        throw new Error("La respuesta de la IA no es un JSON válido.");
+                    }
+                } catch (error) {
+                    attempts++;
+                    if (attempts >= maxAttempts || !error.message.includes('503')) {
+                        throw error; // Rethrow if it's not a 503 error or max attempts reached
+                    }
+                    console.warn(`Attempt ${attempts} failed. Retrying in ${delay / 1000}s...`);
+                    showToast(`La API de IA está sobrecargada. Reintentando... (${attempts}/${maxAttempts})`, 'info');
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2; // Exponential backoff
+                }
+            }
+        }
+
+        async function getDescriptiveAnalysis(symbol, marketData, reportText) {
+            const history = marketData.fullHistory;
+            const closes = history.map(d => d.close);
+            const lastClose = closes[closes.length - 1];
+            const sma50 = calculateSMA(closes, 50).pop();
+            const sma200 = calculateSMA(closes, 200).pop();
+            const rsi = calculateRSI(closes, 14).pop();
+            const macd = calculateMACD(closes);
+            const lastMacd = { line: macd.macdLine.pop(), signal: macd.signalLine.pop() };
+            const threeMonthsAgoIndex = Math.max(0, history.length - 63);
+            const threeMonthsAgoClose = closes[threeMonthsAgoIndex];
+            const threeMonthChange = ((lastClose - threeMonthsAgoClose) / threeMonthsAgoClose) * 100;
+            const historyTable = `| Fecha | Apertura | Máximo | Mínimo | Cierre | Volumen |\n|:---|:---|:---|:---|:---|:---|\n${history.slice(-10).map(d => `| ${d.date} | ${d.open.toFixed(2)} | ${d.high.toFixed(2)} | ${d.low.toFixed(2)} | ${d.close.toFixed(2)} | ${d.volume.toLocaleString()} |`).join('\n')}`;
+
+            const prompt = `Actúa como un estratega de trading técnico a corto plazo. Tu misión es analizar ${symbol} y proporcionar una recomendación clara para un trader activo que busca utilidad a corto plazo (días a semanas).
+
+**CONTEXTO DEL TRADER:** El usuario puede tener o no una posición en ${symbol}. Tus recomendaciones deben ser claras para ambos escenarios.
+- **COMPRAR:** Recomienda esto si el análisis técnico sugiere una alta probabilidad de una subida inminente. Es una señal para ABRIR una nueva posición.
+- **MANTENER:** Recomienda esto si el trader YA TIENE la acción, la tendencia alcista se mantiene fuerte y no hay señales claras de agotamiento. El objetivo es DEJAR CORRER LAS GANANCIAS.
+- **VENDER:** Recomienda esto si el trader YA TIENE la acción y se detectan señales técnicas de debilidad, agotamiento o riesgo de retroceso. El objetivo es TOMAR GANANCIAS o cortar pérdidas.
+
+**1. ANÁLISIS CUALITATIVO (SI APLICA)**
+${reportText ? `Contexto del informe: ${reportText}` : "No se proporcionó un informe de mercado. Realiza un análisis puramente técnico."}
+
+**2. ANÁLISIS CUANTITATIVO**
+- **Datos Clave:** Precio=${lastClose.toFixed(2)}, SMA50=${sma50.toFixed(2)}, SMA200=${sma200.toFixed(2)}, RSI=${rsi.toFixed(2)}, MACD(Línea=${lastMacd.line.toFixed(2)}, Señal=${lastMacd.signal.toFixed(2)}).
+- **Tendencia (3M):** Cambio de ${threeMonthChange.toFixed(2)}%.
+- **Acción de Precio Reciente (Últimos 10 Días):**\n${historyTable}
+
+**TAREA:** Basado en la síntesis de TODA la información, genera una respuesta en formato JSON con la siguiente estructura exacta:
+{
+  "thesis": "Tesis de trading concisa de 2-3 líneas enfocada en la oportunidad a corto plazo.",
+  "recommendation": "Elige una de las 3 opciones definidas en el contexto: COMPRAR, MANTENER, VENDER.",
+  "confidence": "Elige una: ALTA, MEDIA, BAJA.",
+  "detailedJustification": "Párrafo explicando tu razonamiento técnico. **Importante: Menciona explícitamente cualquier patrón de velas relevante (ej. Doji, Envolvente, Martillo) que observes en la tabla de los últimos 10 días y explica su implicación para el corto plazo.** Conecta todos los indicadores.",
+  "tradePlan": {
+    "entryPoint": "Describe un punto de entrada estratégico para una nueva compra.",
+    "stopLoss": "Un precio específico para el stop-loss, justificado técnicamente.",
+    "takeProfit1": "Un primer objetivo de precio para tomar ganancias parciales.",
+    "takeProfit2": "Un segundo objetivo de precio más optimista."
+  },
+  "identifiedRisks": "Enumera los riesgos técnicos clave para el corto plazo (ej. 'RSI en sobrecompra, divergencia bajista en MACD')."
+}`;
+            return await callGeminiAPI(prompt);
+        }
+
+        async function getNumericalTradePlan(tradePlanObject) {
+            const textToParse = JSON.stringify(tradePlanObject);
+            const prompt = `A partir del siguiente objeto JSON, extrae únicamente el primer valor numérico que encuentres para cada clave ('stopLoss', 'takeProfit1', 'takeProfit2'). Devuelve el resultado SOLAMENTE como un objeto JSON válido con números. Si un valor no se encuentra o no es numérico, usa null. Texto de entrada: ${textToParse}`;
+            try {
+                const parsed = await callGeminiAPI(prompt);
+                return {
+                    stopLoss: typeof parsed.stopLoss === 'number' ? parsed.stopLoss : null,
+                    takeProfit1: typeof parsed.takeProfit1 === 'number' ? parsed.takeProfit1 : null,
+                    takeProfit2: typeof parsed.takeProfit2 === 'number' ? parsed.takeProfit2 : null,
+                }
+            } catch (e) {
+                console.error("Fallo al parsear la respuesta numérica de la IA:", e);
+                return { stopLoss: null, takeProfit1: null, takeProfit2: null };
+            }
+        }
+
+        // --- LÓGICA DE APIS Y DATOS ---
+        function getFmpApiKey() {
+            return FMP_API_KEYS[appState.selectedFmpApiKey];
+        }
+
+        function getFmpSymbol(symbol) {
+            return COMMON_CRYPTOS.includes(symbol) ? `${symbol}USD` : symbol;
+        }
+
+        async function fetchWithTimeout(resource, options = {}, timeout = 20000) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            const response = await fetch(resource, { ...options, signal: controller.signal });
+            clearTimeout(id);
+            return response;
+        }
+
+        async function updateAllPrices() {
+            dom.updatePricesLoader.classList.remove('hidden');
+            const promises = appState.watchlist.map(symbol => updateQuoteForSymbol(symbol));
+            await Promise.allSettled(promises);
+            dom.updatePricesLoader.classList.add('hidden');
+            showToast('Precios actualizados.', 'info');
+        }
+
+        async function updateQuoteForSymbol(symbol) {
+            const fmpSymbol = getFmpSymbol(symbol);
+            const apiKey = getFmpApiKey();
+            const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${fmpSymbol}?apikey=${apiKey}`;
+            try {
+                const res = await fetchWithTimeout(quoteUrl);
+                if (!res.ok) throw new Error(`Fallo en la API de cotización`);
+                const data = await res.json();
+                if (data.length > 0) {
+                    if (!appState.marketDataCache[symbol]) appState.marketDataCache[symbol] = {};
+                    appState.marketDataCache[symbol].price = data[0].price;
+                    appState.marketDataCache[symbol].changesPercentage = data[0].changesPercentage;
+                    saveState();
+                    if (appState.activeView === 'dashboard') renderDashboardCard(symbol);
+                    if (appState.activeView === 'simulator') renderSimulatorView();
+                } else {
+                   throw new Error(`No se encontraron datos`);
+                }
+            } catch (error) {
+                console.error(`Error al actualizar cotización de ${symbol}:`, error);
+                showToast(`Error al actualizar ${symbol}`, 'error');
+            }
+        }
+        
+        async function fetchAndCacheSymbolData(symbol) {
+            const cache = appState.marketDataCache[symbol] || {};
+            if (cache.fullHistory && (cache.history4H !== undefined)) return;
+
+            showToast(`Cargando datos de ${symbol}...`, 'info');
+            const fmpSymbol = getFmpSymbol(symbol);
+            const apiKey = getFmpApiKey();
+            
+            const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${fmpSymbol}?apikey=${apiKey}`;
+            const historyUrl = `https://financialmodelingprep.com/api/v3/historical-price-full/${fmpSymbol}?apikey=${apiKey}`;
+            const history4HUrl = `https://financialmodelingprep.com/api/v3/historical-chart/4hour/${fmpSymbol}?apikey=${apiKey}`;
+
+            try {
+                if (!cache.fullHistory) {
+                    const [quoteRes, historyRes] = await Promise.all([
+                        fetchWithTimeout(quoteUrl),
+                        fetchWithTimeout(historyUrl)
+                    ]);
+
+                    if (!quoteRes.ok) throw new Error(`Fallo en API (Cotización): ${quoteRes.statusText}`);
+                    if (!historyRes.ok) throw new Error(`Fallo en API (Historial Diario): ${historyRes.statusText}`);
+
+                    const quoteData = await quoteRes.json();
+                    const historyData = await historyRes.json();
+                    
+                    if (quoteData.length > 0 && historyData.historical) {
+                        if (!appState.marketDataCache[symbol]) appState.marketDataCache[symbol] = {};
+                        appState.marketDataCache[symbol].price = quoteData[0].price;
+                        appState.marketDataCache[symbol].changesPercentage = quoteData[0].changesPercentage;
+                        appState.marketDataCache[symbol].fullHistory = historyData.historical.reverse();
+                    } else {
+                       throw new Error(`No se encontraron datos diarios completos`);
+                    }
+                }
+
+                if (appState.marketDataCache[symbol].history4H === undefined) {
+                    try {
+                        const history4HRes = await fetchWithTimeout(history4HUrl);
+                        if (history4HRes.ok) {
+                            const history4HData = await history4HRes.json();
+                            appState.marketDataCache[symbol].history4H = (history4HData && history4HData.length > 0) ? history4HData.reverse() : null;
+                        } else {
+                            console.warn(`No se pudo obtener el historial de 4 horas para ${symbol} (${history4HRes.status}). Puede ser una limitación del plan de API.`);
+                            appState.marketDataCache[symbol].history4H = null;
+                        }
+                    } catch (e) {
+                         console.warn(`Error al obtener historial de 4H para ${symbol}:`, e);
+                         appState.marketDataCache[symbol].history4H = null;
+                    }
+                }
+
+                saveState();
+            } catch (error) {
+                console.error(`Error al cargar datos de ${symbol}:`, error);
+                showToast(`Error al cargar datos de ${symbol}: ${error.message}`, 'error');
+            }
+        }
+        
+        // --- FUNCIONES DE CÁLCULO DE INDICADORES ---
+        function calculateSMA(data, period) {
+            const sma = new Array(data.length).fill(null);
+            if (data.length < period) return sma;
+            let sum = 0;
+            for (let i = 0; i < period; i++) sum += data[i];
+            sma[period - 1] = sum / period;
+            for (let i = period; i < data.length; i++) {
+                sum = sum - data[i - period] + data[i];
+                sma[i] = sum / period;
+            }
+            return sma;
+        }
+
+        function calculateEMA(data, period) {
+            const ema = new Array(data.length).fill(null);
+            if (data.length < period) return ema;
+            const k = 2 / (period + 1);
+            let initialSum = 0;
+            for (let i = 0; i < period; i++) initialSum += data[i];
+            ema[period - 1] = initialSum / period;
+            for (let i = period; i < data.length; i++) {
+                ema[i] = (data[i] * k) + (ema[i - 1] * (1 - k));
+            }
+            return ema;
+        }
+        
+        function calculateRSI(data, period = 14) {
+            const rsi = new Array(data.length).fill(null);
+            if (data.length <= period) return rsi;
+            let gains = 0, losses = 0;
+            for (let i = 1; i <= period; i++) {
+                const diff = data[i] - data[i - 1];
+                if (diff >= 0) gains += diff; else losses -= diff;
+            }
+            let avgGain = gains / period, avgLoss = losses / period;
+            rsi[period] = 100 - (100 / (1 + (avgLoss === 0 ? Infinity : avgGain / avgLoss)));
+            for (let i = period + 1; i < data.length; i++) {
+                const diff = data[i] - data[i - 1];
+                avgGain = (avgGain * (period - 1) + (diff > 0 ? diff : 0)) / period;
+                avgLoss = (avgLoss * (period - 1) + (diff < 0 ? -diff : 0)) / period;
+                rsi[i] = 100 - (100 / (1 + (avgLoss === 0 ? Infinity : avgGain / avgLoss)));
+            }
+            return rsi;
+        }
+
+        function calculateMACD(data, short = 12, long = 26, signal = 9) {
+            const emaShort = calculateEMA(data, short);
+            const emaLong = calculateEMA(data, long);
+            const macdLine = data.map((_, i) => (emaShort[i] !== null && emaLong[i] !== null) ? emaShort[i] - emaLong[i] : null);
+            const signalLinePadded = new Array(data.length).fill(null);
+            const validMacd = macdLine.filter(v => v !== null);
+            if (validMacd.length > signal) {
+                const signalLine = calculateEMA(validMacd, signal);
+                const startIdx = data.length - signalLine.length;
+                for(let i=0; i < signalLine.length; i++) {
+                    signalLinePadded[startIdx + i] = signalLine[i];
+                }
+            }
+            const histogram = data.map((_, i) => (macdLine[i] !== null && signalLinePadded[i] !== null) ? macdLine[i] - signalLinePadded[i] : null);
+            return { macdLine, signalLine: signalLinePadded, histogram };
+        }
+
+        // --- FUNCIONES AUXILIARES ---
+        function showToast(message, type = 'info') {
+            dom.toast.textContent = message;
+            dom.toast.className = `toast show ${type}`;
+            setTimeout(() => {
+                dom.toast.className = 'toast';
+            }, 3000);
+        }
+
+        // Iniciar la aplicación cuando el DOM esté listo
+        document.addEventListener('DOMContentLoaded', initialize);
+    </script>
+</body>
+</html>
