@@ -237,11 +237,11 @@
     <script type="module">
         // --- CONFIGURACIÓN Y ESTADO ---
         const FMP_API_KEYS = {
-            API_1: '8WdhV0NRTNrNzsW6oOrLeaOdUBfP9Ytk', // Clave de ejemplo 1
-            API_2: 'NAyx0QgFN6dwwwTxGwpFZdcI0CbflBoV'  // Clave de ejemplo 2
+            API_1: '8WdhV0NRTNrNzsW6oOrLeaOdUBfP9Ytk',
+            API_2: 'NAyx0QgFN6dwwwTxGwpFZdcI0CbflBoV'
         };
-        // IMPORTANTE: Clave de API de Google Gemini actualizada
         const GEMINI_API_KEY = 'AIzaSyDenI_hJHqIJcFQfC3EnadrRe2AItd-C-M';
+        const FMP_API_BASE_URL = 'https://financialmodelingprep.com/api/v3';
 
         const COMMON_CRYPTOS = ['BTC', 'ETH', 'XRP', 'LTC', 'BCH', 'ADA', 'DOT', 'DOGE', 'SOL', 'BNB', 'SHIB', 'TRX', 'AVAX', 'LINK', 'MATIC'];
 
@@ -304,13 +304,6 @@
             renderSidebarControls();
             setupEventListeners();
             await renderView();
-            const initialFetches = appState.watchlist
-                .filter(symbol => !appState.marketDataCache[symbol]?.fullHistory)
-                .map(symbol => fetchAndCacheSymbolData(symbol));
-            await Promise.allSettled(initialFetches);
-            if (appState.activeView === 'dashboard') {
-                renderDashboard(); 
-            }
         }
 
         function setupEventListeners() {
@@ -350,12 +343,20 @@
             const reportHeader = e.target.closest('.report-header');
             const viewReportBtn = e.target.closest('.view-full-report-btn');
             const addFromReportBtn = e.target.closest('.add-from-report-btn');
+            const retryBtn = e.target.closest('.retry-load-btn');
 
             if (historyToggleBtn) handleHistoryToggle(historyToggleBtn);
             if (justificationToggleBtn) handleJustificationToggle(justificationToggleBtn);
             if (reportHeader) handleReportCollapse(reportHeader);
             if (viewReportBtn) handleViewFullReport(viewReportBtn);
             if (addFromReportBtn) handleAddFromReport(addFromReportBtn);
+            if (retryBtn) {
+                e.stopPropagation();
+                const symbol = retryBtn.dataset.symbol;
+                retryBtn.innerHTML = `<div class="loader mx-auto"></div>`;
+                retryBtn.disabled = true;
+                loadAndRenderSymbol(symbol);
+            }
         }
 
         // --- GESTIÓN DE ESTADO Y PERSISTENCIA ---
@@ -430,9 +431,10 @@
                 dom.symbolInput.value = '';
                 saveState();
                 renderWatchlist();
-                renderDashboardCardSkeleton(symbol);
-                await fetchAndCacheSymbolData(symbol);
-                renderDashboardCard(symbol);
+                if(appState.activeView === 'dashboard') {
+                    renderDashboardCardSkeleton(symbol);
+                    await loadAndRenderSymbol(symbol);
+                }
                 showToast(`${symbol} añadido a la watchlist.`, 'success');
             } else if (appState.watchlist.includes(symbol)) {
                 showToast(`${symbol} ya está en la watchlist.`, 'info');
@@ -466,6 +468,7 @@
         async function handleNavClick(e) {
             if (e.target.tagName === 'BUTTON') {
                 const viewId = e.target.dataset.view;
+                if (appState.activeView === viewId) return;
                 appState.activeView = viewId;
                 saveState();
                 await renderView();
@@ -480,12 +483,10 @@
             document.querySelectorAll('.view').forEach(view => view.classList.add('hidden'));
 
             const viewElement = document.getElementById(`${appState.activeView}-view`);
-            if (viewElement) {
-                viewElement.classList.remove('hidden');
-            }
+            if (viewElement) viewElement.classList.remove('hidden');
 
             switch (appState.activeView) {
-                case 'dashboard': renderDashboard(); break;
+                case 'dashboard': await renderDashboard(); break;
                 case 'detailed-chart': await renderDetailedChartView(); break;
                 case 'simulator': renderSimulatorView(); break;
                 case 'explorer': renderExplorerView(); break;
@@ -511,19 +512,35 @@
             `).join('');
         }
 
-        function renderDashboard() {
+        async function renderDashboard() {
             if (appState.watchlist.length === 0) {
                 dom.dashboardGrid.innerHTML = `<p class="col-span-full text-center text-gray-500">Añade símbolos a tu watchlist para empezar.</p>`;
                 return;
             }
             dom.dashboardGrid.innerHTML = '';
             appState.watchlist.forEach(symbol => renderDashboardCardSkeleton(symbol));
-            appState.watchlist.forEach(symbol => renderDashboardCard(symbol));
+            
+            const loadPromises = appState.watchlist.map(symbol => loadAndRenderSymbol(symbol));
+            await Promise.allSettled(loadPromises);
+        }
+
+        async function loadAndRenderSymbol(symbol) {
+            try {
+                await fetchAndCacheSymbolData(symbol);
+                renderDashboardCard(symbol);
+            } catch (error) {
+                renderDashboardCardError(symbol, error.message);
+            }
         }
 
         function renderDashboardCardSkeleton(symbol) {
-            const cardHTML = createDashboardCard(symbol);
-            dom.dashboardGrid.insertAdjacentHTML('beforeend', cardHTML);
+            const cardHTML = createDashboardCard(symbol); // createDashboardCard can handle no data
+            const existingCard = document.getElementById(`card-${symbol}`);
+            if (existingCard) {
+                existingCard.outerHTML = cardHTML;
+            } else {
+                dom.dashboardGrid.insertAdjacentHTML('beforeend', cardHTML);
+            }
         }
 
         function renderDashboardCard(symbol) {
@@ -535,11 +552,39 @@
                 dom.dashboardGrid.insertAdjacentHTML('beforeend', cardHTML);
             }
             
+            // Re-attach event listeners
             document.getElementById(`refresh-btn-${symbol}`)?.addEventListener('click', (e) => { e.stopPropagation(); updateQuoteForSymbol(symbol); });
             document.getElementById(`analyze-btn-${symbol}`)?.addEventListener('click', (e) => { e.stopPropagation(); analyzeWithAI(symbol); });
             document.getElementById(`send-to-simulator-btn-${symbol}`)?.addEventListener('click', (e) => { e.stopPropagation(); sendToSimulator(symbol); });
             renderSparkline(symbol);
         }
+        
+        function renderDashboardCardError(symbol, message) {
+            const cardErrorHTML = `
+            <div id="card-${symbol}" class="bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col justify-between h-full">
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-bold text-white">${symbol}</h3>
+                    </div>
+                    <div class="text-center text-red-400 flex-grow flex flex-col justify-center items-center h-32">
+                        <p class="font-semibold">Error al cargar datos</p>
+                        <p class="text-xs mt-1 truncate">${message}</p>
+                    </div>
+                </div>
+                <div class="mt-4 flex">
+                    <button class="retry-load-btn flex-1 bg-blue-600 hover:bg-blue-700 text-sm py-2 rounded-lg flex items-center justify-center space-x-1" data-symbol="${symbol}">
+                        <span>Reintentar</span>
+                    </button>
+                </div>
+            </div>`;
+            const existingCard = document.getElementById(`card-${symbol}`);
+            if (existingCard) {
+                existingCard.outerHTML = cardErrorHTML;
+            } else {
+                dom.dashboardGrid.insertAdjacentHTML('beforeend', cardErrorHTML);
+            }
+        }
+
 
         function createDashboardCard(symbol) {
             const data = appState.marketDataCache[symbol];
@@ -676,9 +721,13 @@
             document.getElementById('timeframe-selector').addEventListener('click', handleTimeframeChange);
             document.getElementById('indicator-toggles').addEventListener('change', handleIndicatorToggle);
 
-            await fetchAndCacheSymbolData(symbol);
-            renderAIAnalysis(symbol);
-            renderAllCharts(symbol);
+            try {
+                await fetchAndCacheSymbolData(symbol);
+                renderAIAnalysis(symbol);
+                renderAllCharts(symbol);
+            } catch (error) {
+                dom.detailedChartView.innerHTML = `<div class="flex items-center justify-center h-full"><p class="text-xl text-red-400">Error al cargar datos para ${symbol}. Intenta de nuevo más tarde.</p></div>`;
+            }
         }
         
         function renderAIAnalysis(symbol) {
@@ -744,8 +793,11 @@
             let sourceData = (isOneMonth && dataCache?.history4H) ? dataCache.history4H : dataCache?.fullHistory;
             
             if (!sourceData) {
-                await fetchAndCacheSymbolData(symbol); // Asegura que todos los datos estén cargados
-                sourceData = (isOneMonth && dataCache?.history4H) ? dataCache.history4H : dataCache?.fullHistory;
+                try {
+                    await fetchAndCacheSymbolData(symbol);
+                    sourceData = (isOneMonth && dataCache?.history4H) ? dataCache.history4H : dataCache?.fullHistory;
+                } catch (e) { /* Error already handled */ }
+
                 if (!sourceData) {
                     console.error("No se pudieron cargar los datos del gráfico para", symbol);
                     return;
@@ -1242,7 +1294,7 @@
         async function enrichTickerData(tickers) {
             if (tickers.length === 0) return {};
             const apiKey = getFmpApiKey();
-            const url = `https://financialmodelingprep.com/api/v3/profile/${tickers.join(',')}?apikey=${apiKey}`;
+            const url = `${FMP_API_BASE_URL}/profile/${tickers.join(',')}?apikey=${apiKey}`;
             try {
                 const res = await fetchWithTimeout(url);
                 if (!res.ok) return {};
@@ -1279,9 +1331,10 @@
                 saveState();
                 renderWatchlist();
                 renderExplorerView(); // Re-render to update button state
-                renderDashboardCardSkeleton(symbol);
-                await fetchAndCacheSymbolData(symbol);
-                renderDashboardCard(symbol);
+                if(appState.activeView === 'dashboard') {
+                    renderDashboardCardSkeleton(symbol);
+                    await loadAndRenderSymbol(symbol);
+                }
                 showToast(`${symbol} añadido a la watchlist.`, 'success');
             }
         }
@@ -1289,26 +1342,38 @@
         // --- LÓGICA DE ANÁLISIS IA ---
         async function analyzeAllSymbols() {
             dom.analyzeAllLoader.classList.remove('hidden');
-            for (const symbol of appState.watchlist) {
-                await analyzeWithAI(symbol);
+            let hasErrors = false;
+            try {
+                const analysisPromises = appState.watchlist.map(symbol => analyzeWithAI(symbol));
+                const results = await Promise.allSettled(analysisPromises);
+                if (results.some(r => r.status === 'rejected')) {
+                    hasErrors = true;
+                }
+            } catch (error) {
+                hasErrors = true;
+                console.error("Error inesperado durante el análisis en lote:", error);
+                showToast("Ocurrió un error inesperado en el análisis.", 'error');
+            } finally {
+                dom.analyzeAllLoader.classList.add('hidden');
+                if (!hasErrors) {
+                    showToast('Análisis en lote completado.', 'success');
+                } else {
+                    showToast('Análisis en lote completado con algunos errores.', 'info');
+                }
             }
-            dom.analyzeAllLoader.classList.add('hidden');
-            showToast('Análisis en lote completado.', 'success');
         }
 
         async function analyzeWithAI(symbol) {
             const loader = document.getElementById(`analyze-loader-${symbol}`) || document.getElementById('symbol-loader');
             if (loader) loader.classList.remove('hidden');
 
-            await fetchAndCacheSymbolData(symbol);
-            if (!appState.marketDataCache[symbol]?.fullHistory) {
-                showToast(`Datos de mercado para ${symbol} no disponibles.`, 'error');
-                if (loader) loader.classList.add('hidden');
-                return;
-            }
-            const latestReportText = appState.weeklyReports.length > 0 ? appState.weeklyReports[0].rawText : '';
-
             try {
+                await fetchAndCacheSymbolData(symbol);
+                if (!appState.marketDataCache[symbol]?.fullHistory) {
+                    throw new Error(`Datos de mercado para ${symbol} no disponibles.`);
+                }
+                const latestReportText = appState.weeklyReports.length > 0 ? appState.weeklyReports[0].rawText : '';
+
                 // Fase 1
                 const descriptiveAnalysis = await getDescriptiveAnalysis(symbol, appState.marketDataCache[symbol], latestReportText);
                 
@@ -1335,10 +1400,10 @@
                 if (appState.activeView === 'detailed-chart' && appState.selectedSymbol === symbol) renderAIAnalysis(symbol);
 
                 showToast(`Análisis para ${symbol} completado.`, 'success');
-
             } catch (error) {
                 console.error(`Error en el análisis de IA para ${symbol}:`, error);
                 showToast(`Fallo el análisis para ${symbol}: ${error.message}`, 'error');
+                throw error; // Re-throw para que las funciones en lote lo detecten
             } finally {
                 if (loader) loader.classList.add('hidden');
             }
@@ -1376,6 +1441,10 @@
                     }
 
                     const data = await response.json();
+                    if (!data.candidates || data.candidates.length === 0) {
+                        console.warn("Respuesta de Gemini bloqueada o vacía:", data);
+                        throw new Error("La respuesta de la IA fue bloqueada o está vacía.");
+                    }
                     try {
                         const text = data.candidates[0].content.parts[0].text;
                         const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -1395,6 +1464,7 @@
                     delay *= 2; // Exponential backoff
                 }
             }
+             throw new Error("No se pudo obtener respuesta de la API de IA después de varios intentos.");
         }
 
         async function getDescriptiveAnalysis(symbol, marketData, reportText) {
@@ -1479,90 +1549,105 @@ ${reportText ? `Contexto del informe: ${reportText}` : "No se proporcionó un in
         async function updateAllPrices() {
             dom.updatePricesLoader.classList.remove('hidden');
             const promises = appState.watchlist.map(symbol => updateQuoteForSymbol(symbol));
-            await Promise.allSettled(promises);
+            const results = await Promise.allSettled(promises);
             dom.updatePricesLoader.classList.add('hidden');
-            showToast('Precios actualizados.', 'info');
+            const failedCount = results.filter(r => r.status === 'rejected').length;
+            if (failedCount > 0) {
+                showToast(`Precios actualizados con ${failedCount} errores.`, 'info');
+            } else {
+                showToast('Precios actualizados.', 'success');
+            }
         }
 
         async function updateQuoteForSymbol(symbol) {
-            const fmpSymbol = getFmpSymbol(symbol);
-            const apiKey = getFmpApiKey();
-            const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${fmpSymbol}?apikey=${apiKey}`;
             try {
+                const fmpSymbol = getFmpSymbol(symbol);
+                const apiKey = getFmpApiKey();
+                const quoteUrl = `${FMP_API_BASE_URL}/quote/${fmpSymbol}?apikey=${apiKey}`;
                 const res = await fetchWithTimeout(quoteUrl);
-                if (!res.ok) throw new Error(`Fallo en la API de cotización`);
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(`[${res.status}] ${errorData["Error Message"] || res.statusText || 'Error de API'}`);
+                }
                 const data = await res.json();
-                if (data.length > 0) {
+                if (data.length > 0 && data[0].price !== undefined) {
                     if (!appState.marketDataCache[symbol]) appState.marketDataCache[symbol] = {};
-                    appState.marketDataCache[symbol].price = data[0].price;
-                    appState.marketDataCache[symbol].changesPercentage = data[0].changesPercentage;
+                    const quoteData = data[0];
+                    appState.marketDataCache[symbol].price = quoteData.price;
+                    appState.marketDataCache[symbol].changesPercentage = quoteData.changesPercentage;
                     saveState();
                     if (appState.activeView === 'dashboard') renderDashboardCard(symbol);
                     if (appState.activeView === 'simulator') renderSimulatorView();
                 } else {
-                   throw new Error(`No se encontraron datos`);
+                   throw new Error(data["Error Message"] || `No se encontraron datos`);
                 }
             } catch (error) {
                 console.error(`Error al actualizar cotización de ${symbol}:`, error);
-                showToast(`Error al actualizar ${symbol}`, 'error');
+                showToast(`Error al actualizar ${symbol}: ${error.message}`, 'error');
+                renderDashboardCardError(symbol, error.message);
+                throw error;
             }
         }
         
         async function fetchAndCacheSymbolData(symbol) {
             const cache = appState.marketDataCache[symbol] || {};
-            if (cache.fullHistory && (cache.history4H !== undefined)) return;
+            const shouldFetchHistory = !cache.fullHistory;
 
-            showToast(`Cargando datos de ${symbol}...`, 'info');
             const fmpSymbol = getFmpSymbol(symbol);
             const apiKey = getFmpApiKey();
             
-            const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${fmpSymbol}?apikey=${apiKey}`;
-            const historyUrl = `https://financialmodelingprep.com/api/v3/historical-price-full/${fmpSymbol}?apikey=${apiKey}`;
-            const history4HUrl = `https://financialmodelingprep.com/api/v3/historical-chart/4hour/${fmpSymbol}?apikey=${apiKey}`;
+            const quoteUrl = `${FMP_API_BASE_URL}/quote/${fmpSymbol}?apikey=${apiKey}`;
+            const historyUrl = `${FMP_API_BASE_URL}/historical-price-full/${fmpSymbol}?apikey=${apiKey}`;
+            const history4HUrl = `${FMP_API_BASE_URL}/historical-chart/4hour/${fmpSymbol}?apikey=${apiKey}`;
 
             try {
-                if (!cache.fullHistory) {
-                    const [quoteRes, historyRes] = await Promise.all([
-                        fetchWithTimeout(quoteUrl),
-                        fetchWithTimeout(historyUrl)
-                    ]);
+                const fetches = [fetchWithTimeout(quoteUrl)];
+                if (shouldFetchHistory) {
+                    fetches.push(fetchWithTimeout(historyUrl), fetchWithTimeout(history4HUrl));
+                }
+                const responses = await Promise.all(fetches);
+                
+                const [quoteRes, historyRes, history4HRes] = responses;
 
-                    if (!quoteRes.ok) throw new Error(`Fallo en API (Cotización): ${quoteRes.statusText}`);
-                    if (!historyRes.ok) throw new Error(`Fallo en API (Historial Diario): ${historyRes.statusText}`);
+                if (!quoteRes.ok) {
+                    const errorData = await quoteRes.json().catch(() => ({}));
+                    throw new Error(`API Cotización [${quoteRes.status}]: ${errorData["Error Message"] || quoteRes.statusText || 'Fallo'}`);
+                }
+                const quoteData = await quoteRes.json();
+                if (!quoteData || quoteData.length === 0 || quoteData[0].price === undefined) {
+                    throw new Error(quoteData["Error Message"] || "Datos de cotización inválidos.");
+                }
+                
+                if (!appState.marketDataCache[symbol]) appState.marketDataCache[symbol] = {};
+                appState.marketDataCache[symbol].price = quoteData[0].price;
+                appState.marketDataCache[symbol].changesPercentage = quoteData[0].changesPercentage;
 
-                    const quoteData = await quoteRes.json();
+                if(shouldFetchHistory) {
+                     if (!historyRes.ok) {
+                        const errorData = await historyRes.json().catch(() => ({}));
+                        throw new Error(`API Historial [${historyRes.status}]: ${errorData["Error Message"] || historyRes.statusText || 'Fallo'}`);
+                    }
                     const historyData = await historyRes.json();
-                    
-                    if (quoteData.length > 0 && historyData.historical) {
-                        if (!appState.marketDataCache[symbol]) appState.marketDataCache[symbol] = {};
-                        appState.marketDataCache[symbol].price = quoteData[0].price;
-                        appState.marketDataCache[symbol].changesPercentage = quoteData[0].changesPercentage;
-                        appState.marketDataCache[symbol].fullHistory = historyData.historical.reverse();
+                    if (!historyData.historical) throw new Error(historyData["Error Message"] || "Datos de historial diario inválidos.");
+                    appState.marketDataCache[symbol].fullHistory = historyData.historical.reverse();
+
+                    // Intentar obtener datos de 4 horas, pero no tratarlo como un error fatal si falla
+                    if (history4HRes && history4HRes.ok) {
+                        const history4HData = await history4HRes.json();
+                        appState.marketDataCache[symbol].history4H = (history4HData && history4HData.length > 0) ? history4HData.reverse() : null;
                     } else {
-                       throw new Error(`No se encontraron datos diarios completos`);
+                        console.warn(`No se pudo obtener el historial de 4 horas para ${symbol}. Puede ser una función premium. Usando datos diarios.`);
+                        appState.marketDataCache[symbol].history4H = null;
                     }
                 }
-
-                if (appState.marketDataCache[symbol].history4H === undefined) {
-                    try {
-                        const history4HRes = await fetchWithTimeout(history4HUrl);
-                        if (history4HRes.ok) {
-                            const history4HData = await history4HRes.json();
-                            appState.marketDataCache[symbol].history4H = (history4HData && history4HData.length > 0) ? history4HData.reverse() : null;
-                        } else {
-                            console.warn(`No se pudo obtener el historial de 4 horas para ${symbol} (${history4HRes.status}). Puede ser una limitación del plan de API.`);
-                            appState.marketDataCache[symbol].history4H = null;
-                        }
-                    } catch (e) {
-                         console.warn(`Error al obtener historial de 4H para ${symbol}:`, e);
-                         appState.marketDataCache[symbol].history4H = null;
-                    }
-                }
-
+                
                 saveState();
             } catch (error) {
                 console.error(`Error al cargar datos de ${symbol}:`, error);
-                showToast(`Error al cargar datos de ${symbol}: ${error.message}`, 'error');
+                showToast(`Error cargando ${symbol}: ${error.message}`, 'error');
+                delete appState.marketDataCache[symbol];
+                saveState();
+                throw error;
             }
         }
         
@@ -1643,3 +1728,4 @@ ${reportText ? `Contexto del informe: ${reportText}` : "No se proporcionó un in
     </script>
 </body>
 </html>
+
