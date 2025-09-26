@@ -683,12 +683,23 @@
 
             dom.detailedChartView.innerHTML = `
                 <div class="space-y-6">
-                    <div class="flex justify-between items-center">
-                        <h2 class="text-3xl font-bold text-white">Análisis Detallado: ${symbol}</h2>
-                        <button id="analyze-symbol-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
-                            <span>Analizar con IA</span>
-                            <div id="symbol-loader" class="loader hidden"></div>
-                        </button>
+                     <div class="flex justify-between items-center flex-wrap gap-4">
+                        <div class="flex items-center gap-4">
+                            <h2 class="text-3xl font-bold text-white">Análisis Detallado: ${symbol}</h2>
+                            <div id="detailed-price-container" class="bg-gray-700 px-3 py-1 rounded-lg text-lg">
+                                <!-- El precio se renderizará aquí -->
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                             <button id="refresh-detailed-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
+                                <span>Actualizar Datos</span>
+                                <div id="refresh-detailed-loader" class="loader hidden"></div>
+                            </button>
+                            <button id="analyze-symbol-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
+                                <span>Analizar con IA</span>
+                                <div id="analyze-loader" class="loader hidden"></div>
+                            </button>
+                        </div>
                     </div>
                     <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
                         <div id="analysis-result-container" class="lg:col-span-3 bg-gray-800 p-6 rounded-lg space-y-4"></div>
@@ -718,15 +729,58 @@
                 </div>`;
             
             document.getElementById('analyze-symbol-btn').addEventListener('click', () => analyzeWithAI(symbol));
+            document.getElementById('refresh-detailed-btn').addEventListener('click', () => handleRefreshDetailedChart(symbol));
             document.getElementById('timeframe-selector').addEventListener('click', handleTimeframeChange);
             document.getElementById('indicator-toggles').addEventListener('change', handleIndicatorToggle);
 
             try {
                 await fetchAndCacheSymbolData(symbol);
+                renderDetailedPrice(symbol);
                 renderAIAnalysis(symbol);
                 renderAllCharts(symbol);
             } catch (error) {
                 dom.detailedChartView.innerHTML = `<div class="flex items-center justify-center h-full"><p class="text-xl text-red-400">Error al cargar datos para ${symbol}. Intenta de nuevo más tarde.</p></div>`;
+            }
+        }
+
+        function renderDetailedPrice(symbol) {
+            const container = document.getElementById('detailed-price-container');
+            if (!container) return;
+            const data = appState.marketDataCache[symbol];
+            if (data && typeof data.price === 'number') {
+                const price = data.price;
+                const change = data.changesPercentage ?? 0;
+                const changeColor = change >= 0 ? 'text-green-400' : 'text-red-400';
+                const changeSign = change >= 0 ? '+' : '';
+                container.innerHTML = `
+                    <span class="font-bold text-white">${price.toFixed(2)} USD</span>
+                    <span class="${changeColor} text-sm ml-2">${changeSign}${change.toFixed(2)}%</span>
+                `;
+            } else {
+                container.innerHTML = `<span class="text-gray-400 text-sm">Cargando...</span>`;
+            }
+        }
+
+        async function handleRefreshDetailedChart(symbol) {
+            const loader = document.getElementById('refresh-detailed-loader');
+            const button = document.getElementById('refresh-detailed-btn');
+            if (!loader || !button) return;
+
+            loader.classList.remove('hidden');
+            button.disabled = true;
+            
+            try {
+                await fetchAndCacheSymbolData(symbol, true); // Forzar la actualización
+                renderDetailedPrice(symbol);
+                renderAllCharts(symbol);
+                showToast(`Datos para ${symbol} actualizados.`, 'success');
+            } catch (error) {
+                showToast(`Error al actualizar ${symbol}: ${error.message}`, 'error');
+                const container = document.getElementById('detailed-price-container');
+                if(container) container.innerHTML = `<span class="text-red-400 text-sm">Error</span>`;
+            } finally {
+                loader.classList.add('hidden');
+                button.disabled = false;
             }
         }
         
@@ -1589,9 +1643,13 @@ ${reportText ? `Contexto del informe: ${reportText}` : "No se proporcionó un in
             }
         }
         
-        async function fetchAndCacheSymbolData(symbol) {
+        async function fetchAndCacheSymbolData(symbol, force = false) {
             const cache = appState.marketDataCache[symbol] || {};
-            const shouldFetchHistory = !cache.fullHistory;
+            const shouldFetchHistory = force || !cache.fullHistory;
+
+            if (!force && cache.fullHistory && cache.price !== undefined) {
+                return; 
+            }
 
             const fmpSymbol = getFmpSymbol(symbol);
             const apiKey = getFmpApiKey();
